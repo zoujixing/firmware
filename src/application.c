@@ -1,9 +1,9 @@
 #include "application.h"
 
-const int redLED = 3;
-const int greenLED = 5;
-const int blueLED = 6;
-const int whiteLED = 9;
+const int redLED = A4;
+const int greenLED = A5;
+const int blueLED = A6;
+const int whiteLED = A7;
 
 int i;
 
