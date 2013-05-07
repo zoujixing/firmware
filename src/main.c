@@ -10,6 +10,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "spark_utilities.h"
+#include "usb_lib.h"
+#include "usb_desc.h"
+#include "usb_pwr.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -23,6 +26,7 @@ __IO uint32_t TimingLED1, TimingLED2;
 __IO uint32_t TimingBUTTON1;
 __IO uint32_t TimingMillis;
 __IO uint32_t TimingSparkProcessAPI;
+__IO uint32_t TimingSparkAliveTimeout;
 
 __IO uint8_t TIMING_BUTTON1_PRESSED;
 
@@ -103,7 +107,7 @@ int main(void)
 	// This will be replaced with SPI-Flash based backup
     if(BKP_ReadBackupRegister(BKP_DR2) != 0xBBBB)
     {
-    	FIRST_TIME_CONFIG = 0x01;
+//    	FIRST_TIME_CONFIG = 0x01;
     }
 #endif
 
@@ -111,6 +115,8 @@ int main(void)
 //	nvmem_read_sp_version(patchVer);
 //	if (patchVer[1] == 14)
 //		Delay(14);
+
+    int DID_CONNECT = 0;
 
 	/* Main loop */
 	while (1)
@@ -123,11 +129,12 @@ int main(void)
 			//
 			Start_Smart_Config();
 		}
-//		else if (!WLAN_DHCP)
-//		{
-//		    wlan_ioctl_set_connection_policy(0, 0, 0);
-//		    wlan_connect(WLAN_SEC_WPA2, "Haxlr8r-upstairs", 16, NULL, "wittycheese551", 14);
-//		}
+		else if (!WLAN_DHCP && !DID_CONNECT)
+		{
+		    wlan_ioctl_set_connection_policy(0, 0, 0);
+		    wlan_connect(WLAN_SEC_WPA2, "Haxlr8r-upstairs", 16, NULL, "wittycheese551", 14);
+		    DID_CONNECT = 1;
+		}
 
 		if(WLAN_DHCP && !SERVER_SOCKET_CONNECTED)
 		{
@@ -142,16 +149,16 @@ int main(void)
 				SERVER_SOCKET_CONNECTED = 1;
 		}
 
-		/********* Moved this section inside the Timing_Decrement method *********/
-		/*************************************************************************/
-		//if(SERVER_SOCKET_CONNECTED)
-		//{
-		//	if(Spark_Process_API_Response() < 0)
-		//		SERVER_SOCKET_CONNECTED = 0;
-		//	else
-		//		DEVICE_HANDSHAKE_FINISHED = 1;
-		//}
-		/*************************************************************************/
+//		/********* Moved this section inside the Timing_Decrement method *********/
+//		/*************************************************************************/
+//		if(SERVER_SOCKET_CONNECTED)
+//		{
+//			if(Spark_Process_API_Response() < 0)
+//				SERVER_SOCKET_CONNECTED = 0;
+//			else
+//				DEVICE_HANDSHAKE_FINISHED = 1;
+//		}
+//		/*************************************************************************/
 #endif
 
 #ifdef SPARK_WIRING_ENABLE
@@ -256,8 +263,22 @@ void Timing_Decrement(void)
 	{
 		TimingSparkProcessAPI++;
 	}
-#endif
 
+	if (SERVER_SOCKET_CONNECTED)
+	{
+		if (TimingSparkAliveTimeout >= TIMING_SPARK_ALIVE_TIMEOUT)
+		{
+			Spark_Disconnect();
+			TimingSparkAliveTimeout = 0;
+			SERVER_SOCKET_CONNECTED = 0;
+			DEVICE_HANDSHAKE_FINISHED = 0;
+		}
+		else
+		{
+			TimingSparkAliveTimeout++;
+		}
+	}
+#endif
 }
 
 /*
