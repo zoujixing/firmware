@@ -11,7 +11,7 @@ fd_set readSet;
 
 // Spark Messages
 const char Device_Secret[] = "secret";
-const char Device_Name[] = "willisawesome";
+const char Device_Name[] = "rccar";
 const char Device_Ok[] = "OK ";
 const char Device_Fail[] = "FAIL ";
 const char Device_CRLF[] = "\n";
@@ -63,10 +63,10 @@ int Spark_Connect(void)
     tSocketAddr.sa_data[1] = (SPARK_SERVER_PORT & 0x00FF);
 
 	// the destination IP address
-	tSocketAddr.sa_data[2] = 54;	// First Octet of destination IP
-	tSocketAddr.sa_data[3] = 235;	// Second Octet of destination IP
-	tSocketAddr.sa_data[4] = 79; 	// Third Octet of destination IP
-	tSocketAddr.sa_data[5] = 249;	// Fourth Octet of destination IP
+	tSocketAddr.sa_data[2] = 122;	// First Octet of destination IP
+	tSocketAddr.sa_data[3] = 248;	// Second Octet of destination IP
+	tSocketAddr.sa_data[4] = 207; 	// Third Octet of destination IP
+	tSocketAddr.sa_data[5] = 97;	// Fourth Octet of destination IP
 
 	retVal = connect(sparkSocket, &tSocketAddr, sizeof(tSocketAddr));
 
