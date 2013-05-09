@@ -85,6 +85,14 @@ void Set_System(void)
 	/* NVIC configuration */
 	NVIC_Configuration();
 
+    /* Enable AFIO clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+
+#ifdef SWD_JTAG_DISABLE
+    /* Disable the Serial Wire JTAG Debug Port SWJ-DP */
+    GPIO_PinRemapConfig(GPIO_Remap_SWJ_Disable, ENABLE);
+#endif
+
 	/* Configure DIOs */
 	int Dx;
 	for(Dx = 0; Dx < Dn; ++Dx)
@@ -124,8 +132,10 @@ void Set_System(void)
  *******************************************************************************/
 void NVIC_Configuration(void)
 {
-	/* Set the Vector Table base location at 0x0000 */
-	NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x0000);
+#ifdef DFU_BUILD_ENABLE
+	/* Set the Vector Table(VT) base location at 0x7000 */
+	NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x7000);
+#endif
 
 	/* Configure the NVIC Preemption Priority Bits */
 	/* 4 bits for pre-emption priority(0-15 PreemptionPriority) and 0 bits for subpriority(0 SubPriority) */
@@ -152,8 +162,10 @@ void DIO_Init(DIO_TypeDef Dx)
     GPIO_InitStructure.GPIO_Pin = DIO_PIN[Dx];
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-
     GPIO_Init(DIO_PORT[Dx], &GPIO_InitStructure);
+
+    /* Set to Off State */
+    DIO_SetState(Dx, LOW);
 }
 
 /**
@@ -379,7 +391,7 @@ void CC3000_WIFI_Init(void)
 
 	/* Configure CC3000_WIFI pins: CS */
 	GPIO_InitStructure.GPIO_Pin = CC3000_WIFI_CS_PIN;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_Init(CC3000_WIFI_CS_GPIO_PORT, &GPIO_InitStructure);
 
@@ -412,7 +424,7 @@ void CC3000_SPI_Init(void)
 
 	/* Configure CC3000_SPI pins: SCK */
 	GPIO_InitStructure.GPIO_Pin = CC3000_SPI_SCK_PIN;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
 	GPIO_Init(CC3000_SPI_SCK_GPIO_PORT, &GPIO_InitStructure);
 
