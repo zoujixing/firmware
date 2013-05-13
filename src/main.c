@@ -25,18 +25,21 @@ __IO uint32_t TimingDelay;
 __IO uint32_t TimingLED1, TimingLED2;
 __IO uint32_t TimingBUTTON1;
 __IO uint32_t TimingMillis;
+
 __IO uint32_t TimingSparkProcessAPI;
+__IO uint32_t TimingSparkAliveTimeout;
 
 __IO uint8_t TIMING_BUTTON1_PRESSED;
 
+uint8_t WLAN_SMART_CONFIG_START;
 uint8_t WLAN_SMART_CONFIG_DONE;
 uint8_t WLAN_CONNECTED;
 uint8_t WLAN_DHCP;
 uint8_t WLAN_CAN_SHUTDOWN;
 
-uint8_t FIRST_TIME_CONFIG;
-uint8_t SERVER_SOCKET_CONNECTED;
-uint8_t DEVICE_HANDSHAKE_FINISHED;
+__IO uint8_t SPARK_SOCKET_CONNECTED;
+__IO uint8_t SPARK_SOCKET_ALIVE;
+__IO uint8_t SPARK_DEVICE_ACKED;
 
 //tNetappIpconfigRetArgs ipconfig;
 
@@ -106,7 +109,7 @@ int main(void)
 	// This will be replaced with SPI-Flash based backup
     if(BKP_ReadBackupRegister(BKP_DR2) != 0xBBBB)
     {
-    	FIRST_TIME_CONFIG = 0x01;
+//    	WLAN_SMART_CONFIG_START = 0x01;
     }
 #endif
 
@@ -115,24 +118,27 @@ int main(void)
 //	if (patchVer[1] == 14)
 //		Delay(14);
 
+    int DID_CONNECT = 0;
+
 	/* Main loop */
 	while (1)
 	{
 #ifdef SPARK_WLAN_ENABLE
-		if(FIRST_TIME_CONFIG)
+		if(WLAN_SMART_CONFIG_START)
 		{
 			//
 			// Start CC3000 first time configuration
 			//
 			Start_Smart_Config();
 		}
-//		else if (!WLAN_DHCP)
-//		{
-//		    wlan_ioctl_set_connection_policy(0, 0, 0);
-//		    wlan_connect(WLAN_SEC_WPA2, "Haxlr8r-upstairs", 16, NULL, "wittycheese551", 14);
-//		}
+		else if (!WLAN_DHCP && !DID_CONNECT)
+		{
+		    wlan_ioctl_set_connection_policy(0, 0, 0);
+		    wlan_connect(WLAN_SEC_WPA2, "Haxlr8r-upstairs", 16, NULL, "wittycheese551", 14);
+		    DID_CONNECT = 1;
+		}
 
-		if(WLAN_DHCP && !SERVER_SOCKET_CONNECTED)
+		if(WLAN_DHCP && !SPARK_SOCKET_CONNECTED)
 		{
 //			netapp_ipconfig(&ipconfig);
 //
@@ -140,26 +146,15 @@ int main(void)
 //				continue;
 
 			if(Spark_Connect() < 0)
-				SERVER_SOCKET_CONNECTED = 0;
+				SPARK_SOCKET_CONNECTED = 0;
 			else
-				SERVER_SOCKET_CONNECTED = 1;
+				SPARK_SOCKET_CONNECTED = 1;
 		}
-
-//		/********* Moved this section inside the Timing_Decrement method *********/
-//		/*************************************************************************/
-//		if(SERVER_SOCKET_CONNECTED)
-//		{
-//			if(Spark_Process_API_Response() < 0)
-//				SERVER_SOCKET_CONNECTED = 0;
-//			else
-//				DEVICE_HANDSHAKE_FINISHED = 1;
-//		}
-//		/*************************************************************************/
 #endif
 
 #ifdef SPARK_WIRING_ENABLE
 #ifdef SPARK_WLAN_ENABLE
-		if(SERVER_SOCKET_CONNECTED && DEVICE_HANDSHAKE_FINISHED)
+		if(SPARK_SOCKET_CONNECTED && SPARK_DEVICE_ACKED)
 		{
 #endif
 			if(NULL != loop)
@@ -216,10 +211,19 @@ void Timing_Decrement(void)
     {
         TimingLED1--;
     }
-    else if(!SERVER_SOCKET_CONNECTED)
+    else if(!SPARK_DEVICE_ACKED)
     {
     	LED_Toggle(LED1);
     	TimingLED1 = 100;	//100ms
+    }
+    else
+    {
+    	static __IO uint8_t SparkDeviceAckedLedOn = 0;
+    	if(!SparkDeviceAckedLedOn)
+    	{
+    		LED_On(LED1);//SPARK_DEVICE_ACKED
+    		SparkDeviceAckedLedOn = 1;
+    	}
     }
 
     if (TimingLED2 != 0x00)
@@ -241,26 +245,45 @@ void Timing_Decrement(void)
     }
 
 #ifdef SPARK_WLAN_ENABLE
-	if (TimingSparkProcessAPI >= TIMING_SPARK_PROCESS_API)
+	if (SPARK_SOCKET_CONNECTED)
 	{
-		TimingSparkProcessAPI = 0x00;
+		SPARK_SOCKET_ALIVE = 1;
 
-		//Should be careful with the below code
-		//as it could block with old CC3000 Firmware
-		if (SERVER_SOCKET_CONNECTED)
+		if (TimingSparkProcessAPI >= TIMING_SPARK_PROCESS_API)
 		{
+			TimingSparkProcessAPI = 0;
+
 			if(Spark_Process_API_Response() < 0)
-				SERVER_SOCKET_CONNECTED = 0;
+				SPARK_SOCKET_ALIVE = 0;
+		}
+		else
+		{
+			TimingSparkProcessAPI++;
+		}
+
+		if (SPARK_DEVICE_ACKED)
+		{
+			if (TimingSparkAliveTimeout >= TIMING_SPARK_ALIVE_TIMEOUT)
+			{
+				TimingSparkAliveTimeout = 0;
+
+				SPARK_SOCKET_ALIVE = 0;
+			}
 			else
-				DEVICE_HANDSHAKE_FINISHED = 1;
+			{
+				TimingSparkAliveTimeout++;
+			}
+		}
+
+		if(SPARK_SOCKET_ALIVE != 1)
+		{
+			Spark_Disconnect();
+
+			SPARK_SOCKET_CONNECTED = 0;
+			SPARK_DEVICE_ACKED = 0;
 		}
 	}
-	else
-	{
-		TimingSparkProcessAPI++;
-	}
 #endif
-
 }
 
 /*
@@ -399,8 +422,9 @@ void WLAN_Async_Callback(long lEventType, char *data, unsigned char length)
 		case HCI_EVNT_WLAN_UNSOL_DISCONNECT:
 			WLAN_CONNECTED = 0;
 			WLAN_DHCP = 0;
-			SERVER_SOCKET_CONNECTED = 0;
-			DEVICE_HANDSHAKE_FINISHED = 0;
+			SPARK_SOCKET_CONNECTED = 0;
+			SPARK_SOCKET_ALIVE = 0;
+			SPARK_DEVICE_ACKED = 0;
 			LED_Off(LED2);
 			break;
 

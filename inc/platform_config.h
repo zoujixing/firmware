@@ -21,8 +21,22 @@
 //#define USE_ST_VLDISCOVERY
 #endif
 
+/* Uncomment the line below to enable DFU based build and follow the below step*/
+/* In Eclipse Project Properties -> C/C++ Build -> Settings -> Tool Settings
+ * -> ARM Sourcery Windows GCC C Linker -> General -> Script file (-T),
+ * Browse & select linker file : "linker_stm32f10x_md_dfu.ld"
+ */
+#define DFU_BUILD_ENABLE
+
+/*
+ * Use the JTAG IOs as standard GPIOs (D3 to D7)
+ * Note that once the JTAG IOs are disabled, the connection with the host debugger
+ * is lost and cannot be re-established as long as the JTAG IOs remain disabled.
+ */
+#define SWD_JTAG_DISABLE
+
 /* Uncomment the line below to enable WLAN and WIRING functionality */
-//#define SPARK_WLAN_ENABLE
+#define SPARK_WLAN_ENABLE
 #define SPARK_WIRING_ENABLE
 
 #define         ID1          (0x1FFFF7E8)
