@@ -36,7 +36,7 @@
 #define SWD_JTAG_DISABLE
 
 /* Uncomment the line below to enable WLAN and WIRING functionality */
-#define SPARK_WLAN_ENABLE
+//#define SPARK_WLAN_ENABLE
 #define SPARK_WIRING_ENABLE
 
 #define         ID1          (0x1FFFF7E8)
