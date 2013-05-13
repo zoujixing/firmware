@@ -64,10 +64,10 @@ int Spark_Connect(void)
     tSocketAddr.sa_data[1] = (SPARK_SERVER_PORT & 0x00FF);
 
 	// the destination IP address
-	tSocketAddr.sa_data[2] = 192;	// First Octet of destination IP
-	tSocketAddr.sa_data[3] = 168;	// Second Octet of destination IP
-	tSocketAddr.sa_data[4] = 0; 	// Third Octet of destination IP
-	tSocketAddr.sa_data[5] = 47;	// Fourth Octet of destination IP
+	tSocketAddr.sa_data[2] = 54;	// First Octet of destination IP
+	tSocketAddr.sa_data[3] = 235;	// Second Octet of destination IP
+	tSocketAddr.sa_data[4] = 79; 	// Third Octet of destination IP
+	tSocketAddr.sa_data[5] = 249;	// Fourth Octet of destination IP
 
 	retVal = connect(sparkSocket, &tSocketAddr, sizeof(tSocketAddr));
 
