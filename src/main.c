@@ -32,7 +32,7 @@ __IO uint32_t TimingSparkAliveTimeout;
 
 __IO uint8_t TIMING_BUTTON1_PRESSED;
 
-uint8_t WLAN_MANUAL_CONNECT = 0;//For Manual connection, set this to 1
+uint8_t WLAN_MANUAL_CONNECT = 1;//For Manual connection, set this to 1
 uint8_t WLAN_SMART_CONFIG_START;
 uint8_t WLAN_SMART_CONFIG_DONE;
 uint8_t WLAN_CONNECTED;
@@ -153,7 +153,7 @@ int main(void)
 		else if (WLAN_MANUAL_CONNECT && !WLAN_DHCP)
 		{
 		    wlan_ioctl_set_connection_policy(DISABLE, DISABLE, DISABLE);
-		    wlan_connect(WLAN_SEC_WPA2, "Haxlr8r-upstairs", 16, NULL, "wittycheese551", 14);
+		    wlan_connect(WLAN_SEC_WPA2, "COCO-MPLS", 9, NULL, "coco1234", 8);
 		    WLAN_MANUAL_CONNECT = 0;
 		}
 
