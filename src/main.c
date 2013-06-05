@@ -180,6 +180,11 @@ int main(void)
 			{
 				loop();
 			}
+
+			if(NULL != pUserFunction)
+			{
+				pUserFunction();
+			}
 #ifdef SPARK_WLAN_ENABLE
 		}
 #endif
