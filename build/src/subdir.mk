@@ -6,7 +6,7 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../src/application.c \
+#../src/application.c \
 ../src/cc3000_spi.c \
 ../src/hw_config.c \
 ../src/main.c \
@@ -22,7 +22,7 @@ C_SRCS += \
 ../src/usb_pwr.c 
 
 OBJS += \
-./src/application.o \
+#./src/application.o \
 ./src/cc3000_spi.o \
 ./src/hw_config.o \
 ./src/main.o \
@@ -38,7 +38,7 @@ OBJS += \
 ./src/usb_pwr.o 
 
 C_DEPS += \
-./src/application.d \
+#./src/application.d \
 ./src/cc3000_spi.d \
 ./src/hw_config.d \
 ./src/main.d \
