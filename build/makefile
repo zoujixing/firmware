@@ -15,7 +15,7 @@ USER_DIR?=user
 -include sources.mk
 -include startup/subdir.mk
 -include src/subdir.mk
--include $(USER_DIR)/subdir.mk
+-include ../$(USER_DIR)/subdir.mk
 -include libraries/STM32_USB-FS-Device_Driver/src/subdir.mk
 -include libraries/STM32F10x_StdPeriph_Driver/src/subdir.mk
 -include libraries/CC3000_Host_Driver/subdir.mk
