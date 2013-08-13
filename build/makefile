@@ -40,31 +40,31 @@ endif
 
 # Add inputs and outputs from these tool invocations to the build variables 
 SECONDARY_FLASH += \
-core-firmware.hex \
+$(CORE_FIRMWARE).hex \
 
 SECONDARY_LIST += \
-core-firmware.lst \
+$(CORE_FIRMWARE).lst \
 
 SECONDARY_SIZE += \
-core-firmware.siz \
+$(CORE_FIRMWARE).siz \
 
 
 # All Target
-all: core-firmware.elf secondary-outputs
+all: $(CORE_FIRMWARE).elf secondary-outputs
 
 # Tool invocations
-core-firmware.elf: $(OBJS) $(USER_OBJS)
+$(CORE_FIRMWARE).elf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target..'
 	arm-none-eabi-gcc -T"../linker/linker_stm32f10x_md_dfu.ld" -nostartfiles -Xlinker --gc-sections -Wl,-Map,$(CORE_FIRMWARE).map -mcpu=cortex-m3 -mthumb -g3 -gdwarf-2 -o "$(CORE_FIRMWARE).elf" $(OBJS) $(USER_OBJS) $(LIBS)
 	$(MAKE) --no-print-directory post-build
 
-core-firmware.hex: core-firmware.elf
+$(CORE_FIRMWARE).hex: $(CORE_FIRMWARE).elf
 	arm-none-eabi-objcopy -O ihex $(CORE_FIRMWARE).elf  "$(CORE_FIRMWARE).hex"
 
-core-firmware.lst: core-firmware.elf
+$(CORE_FIRMWARE).lst: $(CORE_FIRMWARE).elf
 	arm-none-eabi-objdump -h -S $(CORE_FIRMWARE).elf > "$(CORE_FIRMWARE).lst"
 
-core-firmware.siz: core-firmware.elf
+$(CORE_FIRMWARE).siz: $(CORE_FIRMWARE).elf
 	arm-none-eabi-size  --format=berkeley $(CORE_FIRMWARE).elf
 	-@echo 'Finished building target'
 
