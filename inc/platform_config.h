@@ -14,8 +14,8 @@
 
 /* Uncomment the line corresponding to the STM32 board used */
 #if !defined (USE_SPARK_CORE_V01) && !defined (USE_SPARK_CORE_V02)
-#define USE_SPARK_CORE_V01
-//#define USE_SPARK_CORE_V02
+//#define USE_SPARK_CORE_V01
+#define USE_SPARK_CORE_V02
 #endif
 
 /* Uncomment the line below to enable DFU based build and follow the below step*/
@@ -47,6 +47,9 @@
 #define SPARK_WLAN_ENABLE
 #define SPARK_WIRING_ENABLE
 //#define SPARK_SFLASH_ENABLE
+
+/* Toggle LED_USER for every second */
+//#define RTC_TEST_ENABLE
 
 #define         ID1          (0x1FFFF7E8)
 #define         ID2          (0x1FFFF7EC)
@@ -233,6 +236,7 @@
 #define USB_DISCONNECT_GPIO_CLK		  		RCC_APB2Periph_GPIOB
 
 #define UI_TIMER_FREQUENCY					100							/* 100Hz -> 10ms */
+#define BUTTON_DEBOUNCE_INTERVAL			1000 / UI_TIMER_FREQUENCY
 
 /* Exported macro ------------------------------------------------------------*/
 

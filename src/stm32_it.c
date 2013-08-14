@@ -25,7 +25,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* Extern variables ----------------------------------------------------------*/
-extern __IO uint8_t BUTTON_DEBOUNCED[BUTTONn];
+extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
 
 /* Private function prototypes -----------------------------------------------*/
 extern void SPI_DMA_IntHandler(void);
@@ -153,6 +153,32 @@ void SysTick_Handler(void)
 	Timing_Decrement();
 }
 
+#if defined (USE_SPARK_CORE_V02)
+/*******************************************************************************
+ * Function Name  : RTC_IRQHandler
+ * Description    : This function handles RTC global interrupt request.
+ * Input          : None
+ * Output         : None
+ * Return         : None
+ *******************************************************************************/
+void RTC_IRQHandler(void)
+{
+	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
+	{
+		/* Clear the RTC Second interrupt */
+		RTC_ClearITPendingBit(RTC_IT_SEC);
+
+#if defined (RTC_TEST_ENABLE)
+		/* Toggle LED_USER */
+		LED_Toggle(LED_USER);
+#endif
+
+		/* Wait until last write operation on RTC registers has finished */
+		RTC_WaitForLastTask();
+	}
+}
+#endif
+
 /******************************************************************************/
 /*                 STM32 Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */
@@ -187,10 +213,10 @@ void EXTI2_IRQHandler(void)
 		/* Clear the EXTI line pending bit */
 		EXTI_ClearITPendingBit(BUTTON1_EXTI_LINE );
 
+		BUTTON_DEBOUNCED_TIME[BUTTON1] = 0x00;
+
 		/* Disable BUTTON1 Interrupt */
 		BUTTON_EXTI_Config(BUTTON1, DISABLE);
-
-		TIM1->CCR4 += UI_TIMER_FREQUENCY;
 
 		/* Enable TIM1 CC4 Interrupt */
 		TIM_ITConfig(TIM1, TIM_IT_CC4, ENABLE);
@@ -221,10 +247,10 @@ void EXTI15_10_IRQHandler(void)
 		/* Clear the EXTI line pending bit */
 		EXTI_ClearITPendingBit(BUTTON1_EXTI_LINE );
 
+		BUTTON_DEBOUNCED_TIME[BUTTON1] = 0x00;
+
 		/* Disable BUTTON1 Interrupt */
 		BUTTON_EXTI_Config(BUTTON1, DISABLE);
-
-		TIM1->CCR4 += UI_TIMER_FREQUENCY;
 
 		/* Enable TIM1 CC4 Interrupt */
 		TIM_ITConfig(TIM1, TIM_IT_CC4, ENABLE);
@@ -245,16 +271,18 @@ void TIM1_CC_IRQHandler(void)
 	{
 		TIM_ClearITPendingBit(TIM1, TIM_IT_CC4);
 
-		/* Disable TIM1 CC4 Interrupt */
-		TIM_ITConfig(TIM1, TIM_IT_CC4, DISABLE);
-
 		if (BUTTON_GetState(BUTTON1) == BUTTON1_PRESSED)
-			BUTTON_DEBOUNCED[BUTTON1] = 0x01;
+		{
+			BUTTON_DEBOUNCED_TIME[BUTTON1] += BUTTON_DEBOUNCE_INTERVAL;
+		}
 		else
-			BUTTON_DEBOUNCED[BUTTON1] = 0x00;
+		{
+			/* Disable TIM1 CC4 Interrupt */
+			TIM_ITConfig(TIM1, TIM_IT_CC4, DISABLE);
 
-		/* Enable BUTTON1 Interrupt */
-		BUTTON_EXTI_Config(BUTTON1, ENABLE);
+			/* Enable BUTTON1 Interrupt */
+			BUTTON_EXTI_Config(BUTTON1, ENABLE);
+		}
 	}
 }
 

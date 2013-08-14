@@ -33,12 +33,14 @@ const uint32_t DIO_CLK[] = {D0_GPIO_CLK, D1_GPIO_CLK, D2_GPIO_CLK, D3_GPIO_CLK,
 GPIO_TypeDef* LED_PORT[] = {LED1_GPIO_PORT, LED2_GPIO_PORT, LED3_GPIO_PORT, LED4_GPIO_PORT};
 const uint16_t LED_PIN[] = {LED1_PIN, LED2_PIN, LED3_PIN, LED4_PIN};
 const uint32_t LED_CLK[] = {LED1_GPIO_CLK, LED2_GPIO_CLK, LED3_GPIO_CLK, LED4_GPIO_CLK};
+__IO uint16_t LED_TIM_CCR[] = {0x0000, 0x0000, 0x0000, 0x0000};
+int8_t delta1, delta2, delta3;
 
 GPIO_TypeDef* BUTTON_PORT[] = {BUTTON1_GPIO_PORT, BUTTON2_GPIO_PORT};
 const uint16_t BUTTON_PIN[] = {BUTTON1_PIN, BUTTON2_PIN};
 const uint32_t BUTTON_CLK[] = {BUTTON1_GPIO_CLK, BUTTON2_GPIO_CLK};
 GPIOMode_TypeDef BUTTON_GPIO_MODE[] = {BUTTON1_GPIO_MODE, BUTTON2_GPIO_MODE};
-__IO uint8_t BUTTON_DEBOUNCED[] = {0x00, 0x00};
+__IO uint16_t BUTTON_DEBOUNCED_TIME[] = {0, 0};
 
 const uint16_t BUTTON_EXTI_LINE[] = {BUTTON1_EXTI_LINE, BUTTON2_EXTI_LINE};
 const uint16_t BUTTON_PORT_SOURCE[] = {BUTTON1_EXTI_PORT_SOURCE, BUTTON2_EXTI_PORT_SOURCE};
@@ -114,7 +116,6 @@ void Set_System(void)
 	for(LEDx = 0; LEDx < LEDn; ++LEDx)
 	{
 	    LED_Init(LEDx);
-	    LED_Off(LEDx);
 	}
 
     /* Configure the Button */
@@ -155,6 +156,62 @@ void NVIC_Configuration(void)
 	/* 2 bits for pre-emption priority(0-3 PreemptionPriority) and 2 bits for subpriority(0-3 SubPriority) */
 	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
 }
+
+#if defined (USE_SPARK_CORE_V02)
+void RTC_Configuration(void)
+{
+	NVIC_InitTypeDef NVIC_InitStructure;
+
+	/* Enable the RTC Interrupt */
+	NVIC_InitStructure.NVIC_IRQChannel = RTC_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+	/* Enable PWR and BKP clocks */
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+
+	/* Allow access to BKP Domain */
+	PWR_BackupAccessCmd(ENABLE);
+
+	/* Reset Backup Domain */
+	BKP_DeInit();
+
+	/* Enable LSE */
+	RCC_LSEConfig(RCC_LSE_ON);
+
+	/* Wait till LSE is ready */
+	while (RCC_GetFlagStatus(RCC_FLAG_LSERDY) == RESET)
+	{
+	//Do nothing
+	}
+
+	/* Select LSE as RTC Clock Source */
+	RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
+
+	/* Enable RTC Clock */
+	RCC_RTCCLKCmd(ENABLE);
+
+	/* Wait for RTC registers synchronization */
+	RTC_WaitForSynchro();
+
+	/* Wait until last write operation on RTC registers has finished */
+	RTC_WaitForLastTask();
+
+	/* Enable the RTC Second */
+	RTC_ITConfig(RTC_IT_SEC, ENABLE);
+
+	/* Wait until last write operation on RTC registers has finished */
+	RTC_WaitForLastTask();
+
+	/* Set RTC prescaler: set RTC period to 1sec */
+	RTC_SetPrescaler(32767); /* RTC period = RTCCLK/RTC_PR = (32.768 KHz)/(32767+1) */
+
+	/* Wait until last write operation on RTC registers has finished */
+	RTC_WaitForLastTask();
+}
+#endif
 
 void IWDG_Reset_Enable(uint32_t msTimeout)
 {
@@ -241,7 +298,7 @@ void UI_Timer_Configure(void)
 	TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
 	TIM_TimeBaseStructure.TIM_Period = TIM1_Autoreload;
 	TIM_TimeBaseStructure.TIM_Prescaler = TIM1_Prescaler;
-	TIM_TimeBaseStructure.TIM_ClockDivision = 0x0;
+	TIM_TimeBaseStructure.TIM_ClockDivision = 0x0000;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
 
 	TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
@@ -251,23 +308,27 @@ void UI_Timer_Configure(void)
 	/* PWM1 Mode configuration: Channel 1, 2 and 3 */
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-	TIM_OCInitStructure.TIM_Pulse = 0;
+	TIM_OCInitStructure.TIM_Pulse = 0x0000;
+#if defined (USE_SPARK_CORE_V01)
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+#elif defined (USE_SPARK_CORE_V02)
+	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+#endif
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
 
 	TIM_OC1Init(TIM1, &TIM_OCInitStructure);
-	TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+	TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable);
 
 	TIM_OC2Init(TIM1, &TIM_OCInitStructure);
-	TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
+	TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Disable);
 
 	TIM_OC3Init(TIM1, &TIM_OCInitStructure);
-	TIM_OC3PreloadConfig(TIM1, TIM_OCPreload_Enable);
+	TIM_OC3PreloadConfig(TIM1, TIM_OCPreload_Disable);
 
 	/* Output Compare Timing Mode configuration: Channel 4 */
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_Timing;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-	TIM_OCInitStructure.TIM_Pulse = 0;
+	TIM_OCInitStructure.TIM_Pulse = 0x0000;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
 
 	TIM_OC4Init(TIM1, &TIM_OCInitStructure);
@@ -281,6 +342,15 @@ void UI_Timer_Configure(void)
 	/* Main Output Enable */
 	TIM_CtrlPWMOutputs(TIM1, ENABLE);
 }
+
+#if defined (USE_SPARK_CORE_V02)
+void LED_SetRGBColor(uint32_t RGB_Color)
+{
+	LED_TIM_CCR[2] = (uint16_t)(((RGB_Color & 0xFF0000) >> 16) * (TIM1->ARR + 1) / 255);	//LED3 -> Red Led
+	LED_TIM_CCR[3] = (uint16_t)(((RGB_Color & 0xFF00) >> 8) * (TIM1->ARR + 1) / 255);		//LED4 -> Green Led
+	LED_TIM_CCR[1] = (uint16_t)((RGB_Color & 0xFF) * (TIM1->ARR + 1) / 255);				//LED2 -> Blue Led
+}
+#endif
 
 /**
   * @brief  Configures LED GPIO.
@@ -298,7 +368,14 @@ void LED_Init(Led_TypeDef Led)
 
     /* Configure the GPIO_LED pin as alternate function push-pull */
     GPIO_InitStructure.GPIO_Pin = LED_PIN[Led];
+#if defined (USE_SPARK_CORE_V01)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+#elif defined (USE_SPARK_CORE_V02)
+    if(Led == LED_USER)
+    	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    else
+    	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+#endif
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
     GPIO_Init(LED_PORT[Led], &GPIO_InitStructure);
@@ -308,7 +385,7 @@ void LED_Init(Led_TypeDef Led)
   * @brief  Turns selected LED On.
   * @param  Led: Specifies the Led to be set on.
   *   This parameter can be one of following parameters:
-  *     @arg LED1, LED2, LED3, LED4
+  *     @arg LED1, LED2, LED_USER, LED_RGB
   * @retval None
   */
 void LED_On(Led_TypeDef Led)
@@ -317,30 +394,24 @@ void LED_On(Led_TypeDef Led)
 	switch(Led)
 	{
 	case LED1:
-		TIM1->CCR1 = UI_TIMER_FREQUENCY;
+		TIM1->CCR1 = TIM1->ARR + 1;
 		break;
 
 	case LED2:
-		TIM1->CCR2 = UI_TIMER_FREQUENCY;
+		TIM1->CCR2 = TIM1->ARR + 1;
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
 	switch(Led)
 	{
-	case LED1:
+	case LED_USER:
 		LED_PORT[Led]->BSRR = LED_PIN[Led];
 		break;
 
-	case LED2:
-		TIM1->CCR1 = 0;
-		break;
-
-	case LED3:
-		TIM1->CCR2 = 0;
-		break;
-
-	case LED4:
-		TIM1->CCR3 = 0;
+	case LED_RGB:	//LED_SetRGBColor() should be called first for this Case
+		TIM1->CCR2 = LED_TIM_CCR[2];
+		TIM1->CCR3 = LED_TIM_CCR[3];
+		TIM1->CCR1 = LED_TIM_CCR[1];
 		break;
 	}
 #endif
@@ -350,7 +421,7 @@ void LED_On(Led_TypeDef Led)
   * @brief  Turns selected LED Off.
   * @param  Led: Specifies the Led to be set off.
   *   This parameter can be one of following parameters:
-  *     @arg LED1, LED2, LED3, LED4
+  *     @arg LED1, LED2, LED_USER, LED_RGB
   * @retval None
   */
 void LED_Off(Led_TypeDef Led)
@@ -369,20 +440,14 @@ void LED_Off(Led_TypeDef Led)
 #elif defined (USE_SPARK_CORE_V02)
 	switch(Led)
 	{
-	case LED1:
+	case LED_USER:
 		LED_PORT[Led]->BRR = LED_PIN[Led];
 		break;
 
-	case LED2:
-		TIM1->CCR1 = UI_TIMER_FREQUENCY;
-		break;
-
-	case LED3:
-		TIM1->CCR2 = UI_TIMER_FREQUENCY;
-		break;
-
-	case LED4:
-		TIM1->CCR3 = UI_TIMER_FREQUENCY;
+	case LED_RGB:
+		TIM1->CCR2 = 0;
+		TIM1->CCR3 = 0;
+		TIM1->CCR1 = 0;
 		break;
 	}
 #endif
@@ -392,7 +457,7 @@ void LED_Off(Led_TypeDef Led)
   * @brief  Toggles the selected LED.
   * @param  Led: Specifies the Led to be toggled.
   *   This parameter can be one of following parameters:
-  *     @arg LED1, LED2, LED3, LED4
+  *     @arg LED1, LED2, LED_USER, LED_RGB
   * @retval None
   */
 void LED_Toggle(Led_TypeDef Led)
@@ -401,31 +466,90 @@ void LED_Toggle(Led_TypeDef Led)
 	switch(Led)
 	{
 	case LED1:
-		TIM1->CCR1 ^= UI_TIMER_FREQUENCY;
+		TIM1->CCR1 ^= TIM1->ARR + 1;
 		break;
 
 	case LED2:
-		TIM1->CCR2 ^= UI_TIMER_FREQUENCY;
+		TIM1->CCR2 ^= TIM1->ARR + 1;
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
 	switch(Led)
 	{
-	case LED1:
+	case LED_USER:
 		LED_PORT[Led]->ODR ^= LED_PIN[Led];
 		break;
 
+	case LED_RGB://LED_SetRGBColor() and LED_On() should be called first for this Case
+		TIM1->CCR2 ^= LED_TIM_CCR[2];
+		TIM1->CCR3 ^= LED_TIM_CCR[3];
+		TIM1->CCR1 ^= LED_TIM_CCR[1];
+		break;
+	}
+#endif
+}
+
+/**
+  * @brief  Fades selected LED.
+  * @param  Led: Specifies the Led to be set on.
+  *   This parameter can be one of following parameters:
+  *     @arg LED1, LED2, LED_RGB
+  * @retval None
+  */
+void LED_Fade(Led_TypeDef Led)
+{
+#if defined (USE_SPARK_CORE_V01)
+	switch(Led)
+	{
+	case LED1:
+		if(LED_TIM_CCR[1] == 0)
+			delta1 = 0;
+		else if(TIM1->CCR1 == 0)
+			delta1 = 1;
+		else if(TIM1->CCR1 == TIM1->ARR + 1)
+			delta1 = -1;
+
+		TIM1->CCR1 += delta1;
+		break;
+
 	case LED2:
-		TIM1->CCR1 ^= UI_TIMER_FREQUENCY;
-		break;
+		if(LED_TIM_CCR[2] == 0)
+			delta2 = 0;
+		else if(TIM1->CCR2 == 0)
+			delta2 = 1;
+		else if(TIM1->CCR2 == TIM1->ARR + 1)
+			delta2 = -1;
 
-	case LED3:
-		TIM1->CCR2 ^= UI_TIMER_FREQUENCY;
+		TIM1->CCR2 += delta2;
 		break;
+	}
+#elif defined (USE_SPARK_CORE_V02)
+	if(Led == LED_RGB)
+	{
+		if(LED_TIM_CCR[2] == 0)
+			delta2 = 0;
+		else if(TIM1->CCR2 == 0)
+			delta2 = 1;
+		else if(TIM1->CCR2 == TIM1->ARR + 1)
+			delta2 = -1;
 
-	case LED4:
-		TIM1->CCR3 ^= UI_TIMER_FREQUENCY;
-		break;
+		if(LED_TIM_CCR[3] == 0)
+			delta3 = 0;
+		else if(TIM1->CCR3 == 0)
+			delta3 = 1;
+		else if(TIM1->CCR3 == TIM1->ARR + 1)
+			delta3 = -1;
+
+		if(LED_TIM_CCR[1] == 0)
+			delta1 = 0;
+		else if(TIM1->CCR1 == 0)
+			delta1 = 1;
+		else if(TIM1->CCR1 == TIM1->ARR + 1)
+			delta1 = -1;
+
+		TIM1->CCR2 += delta2;
+		TIM1->CCR3 += delta3;
+		TIM1->CCR1 += delta1;
 	}
 #endif
 }
@@ -477,8 +601,6 @@ void BUTTON_Init(Button_TypeDef Button, ButtonMode_TypeDef Button_Mode)
 
         NVIC_Init(&NVIC_InitStructure);
 
-        BUTTON_DEBOUNCED[Button] = 0x00;
-
         BUTTON_EXTI_Config(Button, ENABLE);
     }
 }
@@ -515,21 +637,21 @@ uint8_t BUTTON_GetState(Button_TypeDef Button)
 }
 
 /**
-  * @brief  Returns the selected Button filtered state.
+  * @brief  Returns the selected Button Debounced Time.
   * @param  Button: Specifies the Button to be checked.
   *   This parameter can be one of following parameters:
   *     @arg BUTTON1: Button1
   *     @arg BUTTON2: Button2
-  * @retval Button Debounced state.
+  * @retval Button Debounced time in millisec.
   */
-uint8_t BUTTON_GetDebouncedState(Button_TypeDef Button)
+uint16_t BUTTON_GetDebouncedTime(Button_TypeDef Button)
 {
-	if(BUTTON_DEBOUNCED[BUTTON1] != 0x00)
-	{
-		BUTTON_DEBOUNCED[BUTTON1] = 0x00;
-		return 0x01;
-	}
-	return 0x00;
+	return BUTTON_DEBOUNCED_TIME[Button];
+}
+
+void BUTTON_ResetDebouncedState(Button_TypeDef Button)
+{
+	BUTTON_DEBOUNCED_TIME[Button] = 0;
 }
 
 /**
