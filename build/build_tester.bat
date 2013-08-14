@@ -15,6 +15,6 @@ rem make all
 
 set USER_DIR=tester
 set CORE_FIRMWARE=tester
-make all
+make clean all
 
 pause

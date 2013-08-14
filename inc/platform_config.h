@@ -14,8 +14,8 @@
 
 /* Uncomment the line corresponding to the STM32 board used */
 #if !defined (USE_SPARK_CORE_V01) && !defined (USE_SPARK_CORE_V02)
-//#define USE_SPARK_CORE_V01
-#define USE_SPARK_CORE_V02
+#define USE_SPARK_CORE_V01
+//#define USE_SPARK_CORE_V02
 #endif
 
 /* Uncomment the line below to enable DFU based build and follow the below step*/
@@ -32,7 +32,7 @@
  * Note that once the JTAG IOs are disabled, the connection with the host debugger
  * is lost and cannot be re-established as long as the JTAG IOs remain disabled.
  */
-#define SWD_JTAG_DISABLE
+//#define SWD_JTAG_DISABLE
 
 /*
  * Use Independent Watchdog to force a system reset when a software error occurs
@@ -44,7 +44,7 @@
 #endif
 
 /* Uncomment the line below to enable WLAN and WIRING functionality */
-#define SPARK_WLAN_ENABLE
+//#define SPARK_WLAN_ENABLE
 #define SPARK_WIRING_ENABLE
 //#define SPARK_SFLASH_ENABLE
 
