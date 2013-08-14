@@ -41,11 +41,11 @@ void loop()
 			//if we should receive a byte value in the range of '0'-'9'
 			//lets assume they would like us to turn off all the pins, and turn on just that pin.			
 			handlePinMessage(c);
-			Serial.println("You got it.");
+			Serial.println("OK");
 		}
 		else {
 			//other commands...
-			Serial.println("I didn't understand that.");
+			Serial.println("HUH?");
 		}
 	}
 }
