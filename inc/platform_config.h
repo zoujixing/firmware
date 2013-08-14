@@ -39,7 +39,7 @@
  * During JTAG program/debug, the Watchdog has to be disabled so that it does not
  * upset the debugger
  */
-#define IWDG_RESET_ENABLE
+//#define IWDG_RESET_ENABLE
 
 #endif
 
@@ -49,7 +49,7 @@
 //#define SPARK_SFLASH_ENABLE
 
 /* Toggle LED_USER for every second */
-//#define RTC_TEST_ENABLE
+#define RTC_TEST_ENABLE
 
 #define         ID1          (0x1FFFF7E8)
 #define         ID2          (0x1FFFF7EC)
