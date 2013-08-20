@@ -12,6 +12,7 @@ rem set PATH=%PATH%;%GITBIN%;%BASHBIN%;%MAKEBIN%;%ARMTOOLS%;
 set PATH=%PATH%;%MAKEBIN%;%ARMTOOLS%;
 
 rem make all
+del tester.*
 
 set USER_DIR=tester
 set CORE_FIRMWARE=tester
