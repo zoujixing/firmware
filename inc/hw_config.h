@@ -112,6 +112,9 @@ void LED_SetRGBColor(uint32_t RGB_Color);
 void Set_RGBUserMode(int override);
 void USERLED_SetRGBColor(uint32_t RGB_Color);
 void USERLED_On(Led_TypeDef Led);
+void USERLED_Off(Led_TypeDef Led);
+void USERLED_Toggle(Led_TypeDef Led);
+void USERLED_Fade(Led_TypeDef Led);
 #endif
 
 void LED_Init(Led_TypeDef Led);

@@ -37,8 +37,11 @@ extern __IO uint8_t Spark_Error_Count;
 void (*pHandleMessage)(void);
 char msgBuff[SPARK_BUF_LEN];
 
+
+
 static void handle_message(void);
 static int Spark_Send_Device_Message(long socket, char * cmd, char * cmdparam, char * cmdvalue);
+
 static uint8_t atoc(char data);
 
 /*

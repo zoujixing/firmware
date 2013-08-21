@@ -374,6 +374,27 @@ void USERLED_On(Led_TypeDef Led) {
 	LED_On(Led);
 	LEDUserMode = before;
 }
+void USERLED_Off(Led_TypeDef Led) {
+	uint8_t before = LEDUserMode;
+	
+	LEDUserMode = 0;
+	LED_Off(Led);
+	LEDUserMode = before;
+}
+void USERLED_Toggle(Led_TypeDef Led) {
+	uint8_t before = LEDUserMode;
+	
+	LEDUserMode = 0;
+	LED_Toggle(Led);
+	LEDUserMode = before;
+}
+void USERLED_Fade(Led_TypeDef Led) {
+	uint8_t before = LEDUserMode;
+	
+	LEDUserMode = 0;
+	LED_Fade(Led);
+	LEDUserMode = before;
+}
 
 
 #endif
@@ -428,6 +449,9 @@ void LED_On(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
+
+	if (LEDUserMode) { return; }
+
 	switch(Led)
 	{
 	case LED_USER:
@@ -464,6 +488,9 @@ void LED_Off(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
+
+	if (LEDUserMode) { return; }
+	
 	switch(Led)
 	{
 	case LED_USER:
@@ -500,6 +527,9 @@ void LED_Toggle(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
+
+	if (LEDUserMode) { return; }
+
 	switch(Led)
 	{
 	case LED_USER:
@@ -550,6 +580,9 @@ void LED_Fade(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
+
+	if (LEDUserMode) { return; }
+
 	if(Led == LED_RGB)
 	{
 		if(LED_TIM_CCR[2] == 0)
