@@ -39,7 +39,6 @@ char msgBuff[SPARK_BUF_LEN];
 
 static void handle_message(void);
 static int Spark_Send_Device_Message(long socket, char * cmd, char * cmdparam, char * cmdvalue);
-static unsigned char itoa(int cNum, char *cString);
 static uint8_t atoc(char data);
 
 /*
@@ -322,7 +321,7 @@ static int Spark_Send_Device_Message(long socket, char * cmd, char * cmdparam, c
 }
 
 // brief  Convert integer to ASCII in decimal base
-static unsigned char itoa(int cNum, char *cString)
+unsigned char itoa(int cNum, char *cString)
 {
     char* ptr;
     int uTemp = cNum;

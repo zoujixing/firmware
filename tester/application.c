@@ -1,8 +1,17 @@
+#include "hw_config.h"
+#include "spark_utilities.h"
 #include "application.h"
 #include "spark_wiring.h"
-//extern uint32_t millis();
-//#include "hw_config.h"
-//extern void BUTTON_Init(Button_TypeDef Button, ButtonMode_TypeDef Button_Mode);
+#include <string.h>
+
+/*
+#include "main.h"
+#include "usb_lib.h"
+#include "usb_desc.h"
+#include "usb_pwr.h"
+#include "sst25vf_spi.h"
+#include "spark_utilities.h"
+*/
 
 void setup();
 void loop();
@@ -10,14 +19,16 @@ void allOff();
 void handlePinMessage(int pin);
 void checkButton();
 void handleRGBMessage(int pin);
+void setRGBLED();
 
 int state = 0;
-
 int lastButton = 0;
 int lastButtonState = 0;
 uint32_t btnTime = 0;
 uint32_t debounceDelay = 50;
 uint32_t msgDelay = 100;
+
+
 
 
     //in theory, these pin mappings could change, so this seems safest
@@ -34,8 +45,27 @@ int pins_start = (int)'0';
 int pins_end = (int)'?';
 char buf[256];
 
+
+
+
+int numTestColors = 7;
 int rgb_start = (int)'A';
-int rgb_end = (int)'C';
+int rgb_end = (int)'I';
+
+uint32_t RGBColor = 0;
+uint32_t testColors[] = {
+	0xFF0000, /*RGB_COLOR_RED*/	
+	0x00FF00, /*RGB_COLOR_GREEN*/	
+	0x0000FF, /*RGB_COLOR_BLUE*/	
+	0xFFFF00, /*RGB_COLOR_YELLOW*/	
+	0x00FFFF, /*RGB_COLOR_CYAN*/	
+	0xFF00FF, /*RGB_COLOR_MAGENTA*/	
+	0xFFFFFF /*RGB_COLOR_WHITE*/	
+};
+
+
+
+
 
 void setup()
 {
@@ -47,6 +77,8 @@ void setup()
 
 	//BUTTON_Init(BUTTON1, BUTTON_MODE_GPIO);
 	pinMode(BTN, INPUT);
+	
+	LED_On(LED_RGB);
 	
 	Serial.begin(9600);	
 	//digitalWrite(D0, HIGH);
@@ -60,21 +92,32 @@ void loop()
 		//Serial.println("HEY\n");
 		checkButton();
 	}
+	setRGBLED();
 	
 	if (Serial.available()) {
-		int c = Serial.read();
-		
+		int c = Serial.read();		
+		//char retStr[11];
+		//int retLen = 0;
+
 		if ((c >= pins_start) && (c <= pins_end)) {
 		//if ((c >= 0) && (c < numPins)) {
 			//if we should receive a byte value in the range of '0'-'9'
 			//lets assume they would like us to turn off all the pins, and turn on just that pin.
-
+			
 			handlePinMessage(c - pins_start);
-			Serial.println("OK\n");
+						
+			//retLen = itoa(c-pins_start, retStr);
+			//retStr[retLen] = '\0';
+			//Serial.println(strcat(strcat("OK PIN ", retStr), "\n"));
+			Serial.println("OK PIN \n");
 		}
 		else if ((c >= rgb_start) && (c <= rgb_end)) {
 			handleRGBMessage(c - rgb_start);
-			Serial.println("OK\n");
+						
+			//retLen = itoa(c-rgb_start, retStr);
+			//retStr[retLen] = '\0';
+			//Serial.println(strcat(strcat("OK LED ", retStr), "\n"));
+			Serial.println("OK LED \n");
 		}
 		else {
 			//other commands...?
@@ -109,8 +152,20 @@ void allOff() {
     }
 }
 
-void handleRGBMessage(int pin) {
-	;
+void handleRGBMessage(int idx) {
+	if ((idx >= 0) && (idx < numTestColors)) {
+		RGBColor = testColors[idx];
+	}
+	else {
+		RGBColor = 0;
+	}
+}
+
+void setRGBLED() {
+	if (RGBColor > 0) {
+		LED_SetRGBColor(RGBColor);
+		LED_On(LED_RGB);
+	}
 }
 
 

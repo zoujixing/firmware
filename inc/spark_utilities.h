@@ -27,6 +27,8 @@ void sendMessage(char *message);
 
 //void handleMessage(void) __attribute__ ((weak, alias ("Default_Handler")));
 char handleMessage(char *user_arg) __attribute__ ((weak));
+unsigned char itoa(int cNum, char *cString);
+
 void setup() __attribute__ ((weak));
 void loop() __attribute__ ((weak));
 
