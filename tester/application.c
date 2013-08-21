@@ -74,6 +74,11 @@ void setup()
     for(i=0;i<numPins;i++) {
         pinMode(testPins[i], OUTPUT);
     }
+	
+	//always take over the light.
+	Set_RGBUserMode(1);
+	USERLED_SetRGBColor(0xFFFFFF);
+	
 	//BUTTON_Init(BUTTON1, BUTTON_MODE_GPIO);
 	Serial.begin(9600);	
 }
@@ -157,12 +162,11 @@ void handleRGBMessage(int idx) {
 
 void setRGBLED() {
 	if (RGBColor > 0) {
-		Set_RGBUserMode(1);
 		USERLED_SetRGBColor(RGBColor);
 		USERLED_On(LED_RGB);
 	}
 	else {
-		Set_RGBUserMode(0);
+		USERLED_Off(LED_RGB);
 	}
 }
 
