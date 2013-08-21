@@ -104,6 +104,14 @@ void UI_Timer_Configure(void);
 
 #if defined (USE_SPARK_CORE_V02)
 void LED_SetRGBColor(uint32_t RGB_Color);
+
+//
+//	optionally lets the user firmware take control of the RGB led, for testing purposes
+//
+
+void Set_RGBUserMode(int override);
+void USERLED_SetRGBColor(uint32_t RGB_Color);
+void USERLED_On(Led_TypeDef Led);
 #endif
 
 void LED_Init(Led_TypeDef Led);

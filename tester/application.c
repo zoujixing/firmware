@@ -74,14 +74,8 @@ void setup()
     for(i=0;i<numPins;i++) {
         pinMode(testPins[i], OUTPUT);
     }
-
 	//BUTTON_Init(BUTTON1, BUTTON_MODE_GPIO);
-	pinMode(BTN, INPUT);
-	
-	LED_On(LED_RGB);
-	
 	Serial.begin(9600);	
-	//digitalWrite(D0, HIGH);
 }
 
 
@@ -163,8 +157,12 @@ void handleRGBMessage(int idx) {
 
 void setRGBLED() {
 	if (RGBColor > 0) {
-		LED_SetRGBColor(RGBColor);
-		LED_On(LED_RGB);
+		Set_RGBUserMode(1);
+		USERLED_SetRGBColor(RGBColor);
+		USERLED_On(LED_RGB);
+	}
+	else {
+		Set_RGBUserMode(0);
 	}
 }
 
@@ -172,32 +170,10 @@ void setRGBLED() {
 
 
 void checkButton() {
-/*
 	if(BUTTON_GetDebouncedTime(BUTTON1) >= 100)
 	{
-		int val = digitalRead(BTN);
-		Serial.println((val) ? "BTN DOWN\n" : "BTN UP\n");
 		BUTTON_ResetDebouncedState(BUTTON1);
+		Serial.println("BTN DOWN\n");
 	}
-	*/
-
-	int val = digitalRead(BTN);
-	//if (val != lastButton) {
-		Serial.println((val) ? "BTN 1\n" : "BTN 0\n");
-	//	btnTime = millis();
-	
-	//	lastButton = val;
-	//}
-	/*
-	if ((millis() - btnTime) > debounceDelay) {
-		Serial.println("BTN 2\n");
-		if (lastButtonState != val) {
-			Serial.println("BTN 3\n");
-			Serial.println((val) ? "BTN DOWN\n" : "BTN UP\n");
-			btnTime = 0;
-			lastButtonState = val;
-		}
-	}
-	*/
 }
 

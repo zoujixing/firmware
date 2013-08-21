@@ -62,6 +62,8 @@ uint8_t  USB_Rx_State = 0;
 
 uint32_t USB_USART_BaudRate = 9600;
 
+static uint8_t LEDUserMode = 0;
+
 static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len);
 
 /* Extern variables ----------------------------------------------------------*/
@@ -347,10 +349,33 @@ void UI_Timer_Configure(void)
 #if defined (USE_SPARK_CORE_V02)
 void LED_SetRGBColor(uint32_t RGB_Color)
 {
+	if (LEDUserMode) { return; }
+
 	LED_TIM_CCR[2] = (uint16_t)(((RGB_Color & 0xFF0000) >> 16) * (TIM1->ARR + 1) / 255);	//LED3 -> Red Led
 	LED_TIM_CCR[3] = (uint16_t)(((RGB_Color & 0xFF00) >> 8) * (TIM1->ARR + 1) / 255);		//LED4 -> Green Led
 	LED_TIM_CCR[1] = (uint16_t)((RGB_Color & 0xFF) * (TIM1->ARR + 1) / 255);				//LED2 -> Blue Led
 }
+
+
+void Set_RGBUserMode(int override) {
+	LEDUserMode = override;
+}
+void USERLED_SetRGBColor(uint32_t RGB_Color) {
+	uint8_t before = LEDUserMode;
+	
+	LEDUserMode = 0;
+	LED_SetRGBColor(RGB_Color);	
+	LEDUserMode = before;
+}
+void USERLED_On(Led_TypeDef Led) {
+	uint8_t before = LEDUserMode;
+	
+	LEDUserMode = 0;
+	LED_On(Led);
+	LEDUserMode = before;
+}
+
+
 #endif
 
 /**
