@@ -437,6 +437,8 @@ void LED_Init(Led_TypeDef Led)
   */
 void LED_On(Led_TypeDef Led)
 {
+	if (LEDUserMode) { return; }
+
 #if defined (USE_SPARK_CORE_V01)
 	switch(Led)
 	{
@@ -449,8 +451,6 @@ void LED_On(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
-
-	if (LEDUserMode) { return; }
 
 	switch(Led)
 	{
@@ -476,6 +476,8 @@ void LED_On(Led_TypeDef Led)
   */
 void LED_Off(Led_TypeDef Led)
 {
+if (LEDUserMode) { return; }
+
 #if defined (USE_SPARK_CORE_V01)
 	switch(Led)
 	{
@@ -489,8 +491,6 @@ void LED_Off(Led_TypeDef Led)
 	}
 #elif defined (USE_SPARK_CORE_V02)
 
-	if (LEDUserMode) { return; }
-	
 	switch(Led)
 	{
 	case LED_USER:
@@ -515,6 +515,8 @@ void LED_Off(Led_TypeDef Led)
   */
 void LED_Toggle(Led_TypeDef Led)
 {
+	if (LEDUserMode) { return; }
+
 #if defined (USE_SPARK_CORE_V01)
 	switch(Led)
 	{
@@ -527,8 +529,6 @@ void LED_Toggle(Led_TypeDef Led)
 		break;
 	}
 #elif defined (USE_SPARK_CORE_V02)
-
-	if (LEDUserMode) { return; }
 
 	switch(Led)
 	{
@@ -554,6 +554,8 @@ void LED_Toggle(Led_TypeDef Led)
   */
 void LED_Fade(Led_TypeDef Led)
 {
+	if (LEDUserMode) { return; }
+
 #if defined (USE_SPARK_CORE_V01)
 	switch(Led)
 	{
@@ -581,7 +583,7 @@ void LED_Fade(Led_TypeDef Led)
 	}
 #elif defined (USE_SPARK_CORE_V02)
 
-	if (LEDUserMode) { return; }
+
 
 	if(Led == LED_RGB)
 	{

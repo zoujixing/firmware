@@ -26,8 +26,10 @@ int lastButton = 0;
 int lastButtonState = 0;
 uint32_t btnTime = 0;
 uint32_t debounceDelay = 50;
-uint32_t msgDelay = 100;
-
+uint32_t msgDelay = 2500;
+uint32_t btnDelay = 100;
+int msgCount = 0;
+int sendAlives = 0;
 
 
 
@@ -87,10 +89,24 @@ void setup()
 
 void loop()
 {
-	if ((millis() % msgDelay) == 0) {
-		//Serial.println("HEY\n");
-		checkButton();
+	if ( sendAlives ) {
+		if ((millis() % msgDelay) == 0) {	
+			if (msgCount == 0) {
+				Serial.println("ALIVE\n");
+			}
+			msgCount++;
+		}
+		else {
+			msgCount = 0;
+		}
 	}
+	
+	if ((millis() % btnDelay) == 0) {
+		checkButton();
+		btnDelay = 100;
+	}
+	 
+	
 	setRGBLED();
 	
 	if (Serial.available()) {
@@ -117,6 +133,12 @@ void loop()
 			//retStr[retLen] = '\0';
 			//Serial.println(strcat(strcat("OK LED ", retStr), "\n"));
 			Serial.println("OK LED \n");
+		}
+		else if (c == 'X') {
+			sendAlives = 1;
+		}
+		else if (c == 'Z') {
+			sendAlives = 0;
 		}
 		else {
 			//other commands...?
@@ -157,6 +179,7 @@ void handleRGBMessage(int idx) {
 	}
 	else {
 		RGBColor = 0;
+		USERLED_Off(LED_RGB);
 	}
 }
 
@@ -166,7 +189,7 @@ void setRGBLED() {
 		USERLED_On(LED_RGB);
 	}
 	else {
-		USERLED_Off(LED_RGB);
+		//USERLED_Off(LED_RGB);
 	}
 }
 
