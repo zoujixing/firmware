@@ -115,6 +115,10 @@ int main(void)
 	}
 #endif
 
+#ifdef SPARK_SFLASH_ENABLE
+  sFLASH_Init();
+#endif
+
 #ifdef SPARK_WIRING_ENABLE
 	if((SPARK_DEVICE_IWDGRST != 1) && (NULL != setup))
 	{

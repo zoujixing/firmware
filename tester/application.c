@@ -20,6 +20,7 @@ void handlePinMessage(int pin);
 void checkButton();
 void handleRGBMessage(int pin);
 void setRGBLED();
+char *coreIdToHex(unsigned char *data, int length, char* buffer);
 
 int state = 0;
 int lastButton = 0;
@@ -75,7 +76,7 @@ void setup()
     int i;
     for(i=0;i<numPins;i++) {
         pinMode(testPins[i], OUTPUT);
-    }
+	}
 	
 	//always take over the light.
 	Set_RGBUserMode(1);
@@ -140,13 +141,37 @@ void loop()
 		else if (c == 'Z') {
 			sendAlives = 0;
 		}
+		else if (c == 'M') {
+			
+			char buffer[25];
+			unsigned char coreid[12];
+			memcpy(coreid, (void *)ID1, 12);
+			coreIdToHex(coreid, 12, buffer);
+
+			Serial.print("ID:");
+			Serial.print(buffer);
+			Serial.println(":END");
+		}
 		else {
 			//other commands...?
 			Serial.print("HUH\n");
 		}
 	}
+}
+
+
+char *coreIdToHex(unsigned char *data, int length, char* buffer) {	
+	const char * hex = "0123456789ABCDEF";	
+	int i=0, a=0;
 	
-	
+	for(i=0;i<length;i++) {
+		unsigned char c = data[i];
+		buffer[a] = hex[(c>>4) & 0xF];
+		buffer[a+1] = hex[(c) & 0xF];
+		a+=2;
+	}
+	buffer[24] = 0;	//null
+	return buffer;
 }
 
 void handlePinMessage(int pin) {
