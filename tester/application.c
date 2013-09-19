@@ -154,7 +154,15 @@ void loop()
 		}
 		else {
 			//other commands...?
-			Serial.print("HUH\n");
+
+			unsigned char in[1];
+			in[0] = c;
+
+			char buffer[3];		
+			coreIdToHex(in, 1, buffer);
+
+			Serial.print("HUH: ");
+			Serial.println(buffer);
 		}
 	}
 }
