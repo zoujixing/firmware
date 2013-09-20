@@ -135,6 +135,13 @@ void loop()
 			//Serial.println(strcat(strcat("OK LED ", retStr), "\n"));
 			Serial.println("OK LED \n");
 		}
+		else if (c == 'T') {
+			char buffer[32];
+			unsigned char size = itoa(millis(), buffer);
+			Serial.print("The time is:");
+			Serial.print(buffer);
+			Serial.println(":");
+		}
 		else if (c == 'X') {
 			sendAlives = 1;
 		}
