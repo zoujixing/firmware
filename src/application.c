@@ -138,6 +138,8 @@ void loop()
 		else if (c == 'T') {
 			char buffer[32];
 			unsigned char size = itoa(millis(), buffer);
+			buffer[size] = '\0';
+
 			Serial.print("The time is:");
 			Serial.print(buffer);
 			Serial.println(":");
