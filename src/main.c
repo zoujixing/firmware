@@ -31,7 +31,7 @@ __IO uint32_t TimingSparkProcessAPI;
 __IO uint32_t TimingSparkAliveTimeout;
 __IO uint32_t TimingSparkResetTimeout;
 
-uint8_t WLAN_MANUAL_CONNECT = 0;//For Manual connection, set this to 1
+uint8_t WLAN_MANUAL_CONNECT = 1;//For Manual connection, set this to 1
 uint8_t WLAN_SMART_CONFIG_START;
 uint8_t WLAN_SMART_CONFIG_STOP;
 uint8_t WLAN_SMART_CONFIG_FINISHED;
@@ -128,38 +128,40 @@ int main(void)
 
 #ifdef SPARK_WLAN_ENABLE
 
-	/* Initialize CC3000's CS, EN and INT pins to their default states */
-	CC3000_WIFI_Init();
+	//MOVED TO TEST SOFTWARE
 
-	/* Configure & initialize CC3000 SPI_DMA Interface */
-	CC3000_SPI_DMA_Init();
+	///* Initialize CC3000's CS, EN and INT pins to their default states */
+	//CC3000_WIFI_Init();
 
-	/* WLAN On API Implementation */
-	wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
-				CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
+	///* Configure & initialize CC3000 SPI_DMA Interface */
+	//CC3000_SPI_DMA_Init();
 
-	Delay(100);
+	///* WLAN On API Implementation */
+	//wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
+	//			CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
 
-	/* Trigger a WLAN device */
-	wlan_start(0);
+	//Delay(100);
 
-	/* Mask out all non-required events from CC3000 */
-	wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
+	///* Trigger a WLAN device */
+	//wlan_start(0);
 
-	if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
-	{
-		/* Delete all previously stored wlan profiles */
-		wlan_ioctl_del_profile(255);
+	///* Mask out all non-required events from CC3000 */
+	//wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
 
-		/* Create new entry for Spark File in CC3000 EEPROM */
-		nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
-		nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
-	}
+	//if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
+	//{
+	//	/* Delete all previously stored wlan profiles */
+	//	wlan_ioctl_del_profile(255);
 
-	Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
+	//	/* Create new entry for Spark File in CC3000 EEPROM */
+	//	nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
+	//	nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
+	//}
+
+	//Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
 
 #if defined (USE_SPARK_CORE_V02)
-	if(Spark_Error_Count)
+	/*if(Spark_Error_Count)
 	{
 		LED_SetRGBColor(RGB_COLOR_RED);
 		LED_On(LED_RGB);
@@ -173,7 +175,7 @@ int main(void)
 
 		NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET] = 0;
 		nvmem_write(NVMEM_SPARK_FILE_ID, 1, ERROR_COUNT_FILE_OFFSET, &NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET]);
-	}
+	}*/
 #endif
 
 #ifdef DFU_BUILD_ENABLE
@@ -185,7 +187,7 @@ int main(void)
     	Set_NetApp_Timeout();
     }
 
-	if(!WLAN_MANUAL_CONNECT)
+	/*if(!WLAN_MANUAL_CONNECT)
 	{
 #ifdef DFU_BUILD_ENABLE
 		if(Smart_Config_SysFlag != 0xBBBB || NVMEM_Spark_File_Data[WLAN_PROFILE_FILE_OFFSET] == 0)
@@ -195,14 +197,14 @@ int main(void)
 		{
 			WLAN_SMART_CONFIG_START = 1;
 		}
-	}
+	}*/
 
-	nvmem_read_sp_version(patchVer);
-	if (patchVer[1] == 19)
-	{
-		/* patchVer = "\001\023" */
-		/* Latest Patch Available after flashing "cc3000-patch-programmer.bin" */
-	}
+	//nvmem_read_sp_version(patchVer);
+	//if (patchVer[1] == 19)
+	//{
+	//	/* patchVer = "\001\023" */
+	//	/* Latest Patch Available after flashing "cc3000-patch-programmer.bin" */
+	//}
 #endif
 
 #if defined (USE_SPARK_CORE_V02)
@@ -227,10 +229,10 @@ int main(void)
 		}
 		else if (WLAN_MANUAL_CONNECT && !WLAN_DHCP)
 		{
-		    wlan_ioctl_set_connection_policy(DISABLE, DISABLE, DISABLE);
+		    //wlan_ioctl_set_connection_policy(DISABLE, DISABLE, DISABLE);
 		    /* Edit the below line before use*/
-		    wlan_connect(WLAN_SEC_WPA2, "ssid", 4, NULL, "password", 8);
-		    WLAN_MANUAL_CONNECT = 0;
+		    //wlan_connect(WLAN_SEC_WPA2, "ssid", 4, NULL, "password", 8);
+		    //WLAN_MANUAL_CONNECT = 0;
 		}
 
 #if defined (USE_SPARK_CORE_V02)
@@ -290,8 +292,8 @@ int main(void)
 
 #ifdef SPARK_WIRING_ENABLE
 #ifdef SPARK_WLAN_ENABLE
-		if(SPARK_SOCKET_CONNECTED && SPARK_DEVICE_ACKED)
-		{
+		//if(SPARK_SOCKET_CONNECTED && SPARK_DEVICE_ACKED)
+		//{
 #endif
 			if((SPARK_DEVICE_IWDGRST != 1) && (NULL != loop))
 			{
@@ -303,7 +305,7 @@ int main(void)
 				pHandleMessage();
 			}
 #ifdef SPARK_WLAN_ENABLE
-		}
+		//}
 #endif
 #endif
 	}
