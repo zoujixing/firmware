@@ -3,9 +3,6 @@
 #include "application.h"
 #include "spark_wiring.h"
 #include <string.h>
-#include "socket.h"
-#include "netapp.h"
-#include <stdlib.h>
 
 /*
 #include "main.h"
@@ -602,8 +599,7 @@ void serialPrint(const char * str) {
 //}
 
 void wifiEnable() {
-	/* Disable CC3000 */
-	CC3000_Write_Enable_Pin(WLAN_ENABLE);
+	/* Enable CC3000 */
 
 	wlan_start(0);
 }

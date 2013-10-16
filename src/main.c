@@ -198,12 +198,12 @@ int main(void)
 		}
 	}*/
 
-	//nvmem_read_sp_version(patchVer);
-	//if (patchVer[1] == 19)
-	//{
-	//	/* patchVer = "\001\023" */
-	//	/* Latest Patch Available after flashing "cc3000-patch-programmer.bin" */
-	//}
+	nvmem_read_sp_version(patchVer);
+	if (patchVer[1] == 19)
+	{
+		/* patchver = "\001\023" */
+		/* latest patch available after flashing "cc3000-patch-programmer.bin" */
+	}
 #endif
 
 #if defined (USE_SPARK_CORE_V02)
@@ -220,93 +220,97 @@ int main(void)
 	/* Main loop */
 	while (1)
 	{
-#ifdef SPARK_WLAN_ENABLE
-		if(WLAN_SMART_CONFIG_START)
-		{
-			/* Start CC3000 Smart Config Process */
-			Start_Smart_Config();
-		}
-		else if (WLAN_MANUAL_CONNECT && !WLAN_DHCP)
-		{
-		    //wlan_ioctl_set_connection_policy(DISABLE, DISABLE, DISABLE);
-		    /* Edit the below line before use*/
-		    //wlan_connect(WLAN_SEC_WPA2, "ssid", 4, NULL, "password", 8);
-		    //WLAN_MANUAL_CONNECT = 0;
-		}
+//#ifdef SPARK_WLAN_ENABLE
+//if(WLAN_SMART_CONFIG_START)
+//{
+//	/* Start CC3000 Smart Config Process */
+//	Start_Smart_Config();
+//}
+//else if (WLAN_MANUAL_CONNECT && !WLAN_DHCP)
+//{
+//    //wlan_ioctl_set_connection_policy(DISABLE, DISABLE, DISABLE);
+//    /* Edit the below line before use*/
+//    //wlan_connect(WLAN_SEC_WPA2, "ssid", 4, NULL, "password", 8);
+//    //WLAN_MANUAL_CONNECT = 0;
+//}
 
-#if defined (USE_SPARK_CORE_V02)
-		if(Spark_Error_Count)
-		{
-			SPARK_LED_TOGGLE = 0;
-			LED_SetRGBColor(RGB_COLOR_RED);
-			LED_On(LED_RGB);
+//DEBUG, trying to remove things we don't need
+//#if defined (USE_SPARK_CORE_V02)
+//		if(Spark_Error_Count)
+//		{
+//			SPARK_LED_TOGGLE = 0;
+//			LED_SetRGBColor(RGB_COLOR_RED);
+//			LED_On(LED_RGB);
+//
+//			while(Spark_Error_Count != 0)
+//			{
+//				LED_Toggle(LED_RGB);
+//				Spark_Error_Count--;
+//				Delay(250);
+//			}
+//
+//			LED_SetRGBColor(RGB_COLOR_GREEN);
+//			LED_On(LED_RGB);
+//			SPARK_LED_TOGGLE = 1;
+//		}
+//#endif
 
-			while(Spark_Error_Count != 0)
-			{
-				LED_Toggle(LED_RGB);
-				Spark_Error_Count--;
-				Delay(250);
-			}
-
-			LED_SetRGBColor(RGB_COLOR_GREEN);
-			LED_On(LED_RGB);
-			SPARK_LED_TOGGLE = 1;
-		}
-#endif
-
-		// Complete Smart Config Process:
-		// 1. if smart config is done
-		// 2. CC3000 established AP connection
-		// 3. DHCP IP is configured
-		// then send mDNS packet to stop external SmartConfig application
-		if ((WLAN_SMART_CONFIG_STOP == 1) && (WLAN_DHCP == 1) && (WLAN_CONNECTED == 1))
-		{
-			unsigned char loop_index = 0;
-
-			while (loop_index < 3)
-			{
-				mdnsAdvertiser(1,device_name,strlen(device_name));
-				loop_index++;
-			}
-
-			WLAN_SMART_CONFIG_STOP = 0;
-		}
-
-		if(WLAN_DHCP && !SPARK_SOCKET_CONNECTED)
-		{
-#if defined (USE_SPARK_CORE_V02)
-			LED_SetRGBColor(RGB_COLOR_CYAN);
-			LED_On(LED_RGB);
-			SPARK_LED_TOGGLE = 1;
-#endif
-
-			Socket_Connect_Count++;
-
-			if(Spark_Connect() < 0)
-				SPARK_SOCKET_CONNECTED = 0;
-			else
-				SPARK_SOCKET_CONNECTED = 1;
-		}
-#endif
-
-#ifdef SPARK_WIRING_ENABLE
-#ifdef SPARK_WLAN_ENABLE
-		//if(SPARK_SOCKET_CONNECTED && SPARK_DEVICE_ACKED)
+		//DEBUG, trying to remove things we don't need
+		//// Complete Smart Config Process:
+		//// 1. if smart config is done
+		//// 2. CC3000 established AP connection
+		//// 3. DHCP IP is configured
+		//// then send mDNS packet to stop external SmartConfig application
+		//if ((WLAN_SMART_CONFIG_STOP == 1) && (WLAN_DHCP == 1) && (WLAN_CONNECTED == 1))
 		//{
-#endif
-			if((SPARK_DEVICE_IWDGRST != 1) && (NULL != loop))
-			{
-				loop();
-			}
+		//	unsigned char loop_index = 0;
 
-			if((SPARK_DEVICE_IWDGRST != 1) && (NULL != pHandleMessage))
-			{
-				pHandleMessage();
-			}
-#ifdef SPARK_WLAN_ENABLE
+		//	while (loop_index < 3)
+		//	{
+		//		mdnsAdvertiser(1,device_name,strlen(device_name));
+		//		loop_index++;
+		//	}
+
+		//	WLAN_SMART_CONFIG_STOP = 0;
 		//}
-#endif
-#endif
+
+//DEBUG, trying to remove things we don't need
+//		if(WLAN_DHCP && !SPARK_SOCKET_CONNECTED)
+//		{
+//#if defined (USE_SPARK_CORE_V02)
+//			LED_SetRGBColor(RGB_COLOR_CYAN);
+//			LED_On(LED_RGB);
+//			SPARK_LED_TOGGLE = 1;
+//#endif
+//
+//			Socket_Connect_Count++;
+//
+//			if(Spark_Connect() < 0)
+//				SPARK_SOCKET_CONNECTED = 0;
+//			else
+//				SPARK_SOCKET_CONNECTED = 1;
+//		}
+//#endif
+
+//#ifdef SPARK_WIRING_ENABLE
+//#ifdef SPARK_WLAN_ENABLE
+//		//if(SPARK_SOCKET_CONNECTED && SPARK_DEVICE_ACKED)
+//		//{
+//#endif
+			//if((SPARK_DEVICE_IWDGRST != 1) && (NULL != loop))
+			//{
+				loop();
+			//}
+
+			//DEBUG, trying to remove things we don't need
+			//if((SPARK_DEVICE_IWDGRST != 1) && (NULL != pHandleMessage))
+			//{
+			//	pHandleMessage();
+			//}
+//#ifdef SPARK_WLAN_ENABLE
+//		//}
+//#endif
+//#endif
 	}
 }
 
