@@ -128,37 +128,36 @@ int main(void)
 
 #ifdef SPARK_WLAN_ENABLE
 
-	//MOVED TO TEST SOFTWARE
+	
+	/* Initialize CC3000's CS, EN and INT pins to their default states */
+	CC3000_WIFI_Init();
 
-	///* Initialize CC3000's CS, EN and INT pins to their default states */
-	//CC3000_WIFI_Init();
+	/* Configure & initialize CC3000 SPI_DMA Interface */
+	CC3000_SPI_DMA_Init();
 
-	///* Configure & initialize CC3000 SPI_DMA Interface */
-	//CC3000_SPI_DMA_Init();
+	/* WLAN On API Implementation */
+	wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
+				CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
 
-	///* WLAN On API Implementation */
-	//wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
-	//			CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
+	Delay(100);
 
-	//Delay(100);
+	/* Trigger a WLAN device */
+	wlan_start(0);
 
-	///* Trigger a WLAN device */
-	//wlan_start(0);
+	/* Mask out all non-required events from CC3000 */
+	wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
 
-	///* Mask out all non-required events from CC3000 */
-	//wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
+	if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
+	{
+		/* Delete all previously stored wlan profiles */
+		wlan_ioctl_del_profile(255);
 
-	//if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
-	//{
-	//	/* Delete all previously stored wlan profiles */
-	//	wlan_ioctl_del_profile(255);
+		/* Create new entry for Spark File in CC3000 EEPROM */
+		nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
+		nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
+	}
 
-	//	/* Create new entry for Spark File in CC3000 EEPROM */
-	//	nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
-	//	nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
-	//}
-
-	//Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
+	Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
 
 #if defined (USE_SPARK_CORE_V02)
 	/*if(Spark_Error_Count)

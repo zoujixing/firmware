@@ -23,7 +23,8 @@ void handlePinMessage(int pin);
 void checkButton();
 void handleRGBMessage(int pin);
 void setRGBLED();
-void initializeWifi();
+void wifiEnable();
+void wifiDisable();
 
 uint8_t serialAvailable();
 int32_t serialRead();
@@ -103,7 +104,9 @@ char command[256];
 const char cmd_CONNECT[] = "CONNECT:";
 const char cmd_OPEN[] = "OPEN:";
 const char cmd_PARSE[] = "PARSE:";
-const char cmd_INIT[] = "INIT:";
+const char cmd_ENABLE[] = "ENABLE:";
+const char cmd_DISABLE[] = "DISABLE:";
+
 
 /* -------------WIFI ------------------ */
 
@@ -272,9 +275,16 @@ void checkWifiSerial(char c) {
 		char *parts[5];			
 		char *start;
 			
-		if (start = strstr(command, cmd_INIT)) {
-			serialPrintln("initializing wifi...");
-			initializeWifi();
+		if (start = strstr(command, cmd_ENABLE)) {
+			serialPrintln("enable wifi...");
+			//initializeWifi();
+			wifiEnable();
+			serialPrintln("DONE DONE DONE DONE DONE DONE DONE DONE DONE DONE");
+		}
+		else if (start = strstr(command, cmd_DISABLE)) {
+			serialPrintln("disable wifi...");
+			//initializeWifi();
+			wifiDisable();
 			serialPrintln("DONE DONE DONE DONE DONE DONE DONE DONE DONE DONE");
 		}
 		else if (start = strstr(command, cmd_CONNECT)) {
@@ -556,37 +566,65 @@ void serialPrint(const char * str) {
 }
 
 
+//
+//void initializeWifi() {
+//	/* Initialize CC3000's CS, EN and INT pins to their default states */
+//	CC3000_WIFI_Init();
+//
+//	/* Configure & initialize CC3000 SPI_DMA Interface */
+//	CC3000_SPI_DMA_Init();
+//
+//	/* WLAN On API Implementation */
+//	wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
+//				CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
+//
+//	Delay(100);
+//
+//	/* Trigger a WLAN device */
+//	wlan_start(0);
+//
+//	/* Mask out all non-required events from CC3000 */
+//	wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
+//
+//	//if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
+//	//{
+//		/* Delete all previously stored wlan profiles */
+//		wlan_ioctl_del_profile(255);
+//
+//		/* Create new entry for Spark File in CC3000 EEPROM */
+//		//nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
+//		//nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
+//	//}
+//
+//	//Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
+//
+//	Delay(1000);
+//}
 
-void initializeWifi() {
-	/* Initialize CC3000's CS, EN and INT pins to their default states */
-	CC3000_WIFI_Init();
+void wifiEnable() {
+	/* Disable CC3000 */
+	CC3000_Write_Enable_Pin(WLAN_ENABLE);
 
-	/* Configure & initialize CC3000 SPI_DMA Interface */
-	CC3000_SPI_DMA_Init();
-
-	/* WLAN On API Implementation */
-	wlan_init(WLAN_Async_Callback, WLAN_Firmware_Patch, WLAN_Driver_Patch, WLAN_BootLoader_Patch,
-				CC3000_Read_Interrupt_Pin, CC3000_Interrupt_Enable, CC3000_Interrupt_Disable, CC3000_Write_Enable_Pin);
-
-	Delay(100);
-
-	/* Trigger a WLAN device */
 	wlan_start(0);
+}
 
-	/* Mask out all non-required events from CC3000 */
-	wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT | HCI_EVNT_WLAN_ASYNC_PING_REPORT);
+void wifiDisable() {
+	/* Disable CC3000 */
+	CC3000_Write_Enable_Pin(WLAN_DISABLE);
 
-	//if(nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != 0)
-	//{
-		/* Delete all previously stored wlan profiles */
-		wlan_ioctl_del_profile(255);
+	//WLAN_CONNECTED = 0;
+	//WLAN_DHCP = 0;
+	//SPARK_WLAN_RESET = 0;
+	//SPARK_WLAN_STARTED = 0;
+	//SPARK_SOCKET_CONNECTED = 0;
+	//SPARK_SOCKET_ALIVE = 0;
+	//SPARK_DEVICE_ACKED = 0;
+	//SPARK_FLASH_UPDATE = 0;
+	//SPARK_LED_FADE = 0;
+	//Spark_Error_Count = 0;
+	//TimingSparkProcessAPI = 0;
+	//TimingSparkAliveTimeout = 0;
 
-		/* Create new entry for Spark File in CC3000 EEPROM */
-		//nvmem_create_entry(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE);
-		//nvmem_write(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data);
-	//}
+	//CC3000_Write_Enable_Pin(WLAN_DISABLE);
 
-	//Spark_Error_Count = NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET];
-
-	Delay(1000);
 }
