@@ -2,7 +2,8 @@
 #include "string.h"
 #include "handshake.h"
 
-
+int lockDone = false;
+int unlockDone = false;
 
 /**
 	Bootloader Lock / Unlock software:
@@ -21,8 +22,8 @@
 
 void setup()
 {
-	pinMode(D0, INPUT);			//both (d0,d2) high to lock
-	pinMode(D2, INPUT);			//only d1 high to unlock
+	//pinMode(D0, INPUT_PULLDOWN);			//both (d0,d2) high to lock
+	//pinMode(D2, INPUT_PULLDOWN);			//only d1 high to unlock
 
 	pinMode(A0, OUTPUT);		//locked indicator pin
 	pinMode(A1, OUTPUT);		//unlocked indicator pin
@@ -30,29 +31,68 @@ void setup()
 	LED_SetRGBColor(RGB_COLOR_BLUE);
     LED_On(LED_RGB);
 
-	//digitalWrite(A0, HIGH);
-	//digitalWrite(A1, HIGH);
+	digitalWrite(A0, LOW);
+	digitalWrite(A1, LOW);
 }
 
 void loop()
 {
-	LED_SetRGBColor(RGB_COLOR_BLUE);
-    LED_On(LED_RGB);
+	// set RGB	
+	if (lockDone) {
+		LED_SetRGBColor(RGB_COLOR_RED);
+		LED_On(LED_RGB);
+		
+		//also delete any saved smart config profiles
+		wlan_ioctl_del_profile(255);
+		
+		delay(1000);
+	}
+	else if (unlockDone) {
+		LED_SetRGBColor(RGB_COLOR_GREEN);
+		LED_On(LED_RGB);
+		delay(1000);
+	}
+	else {
+		LED_SetRGBColor(RGB_COLOR_BLUE);
+		LED_On(LED_RGB);
+	}
 
+	//optionally reset the core
+	if (lockDone || unlockDone) {
 
-	int inpin1 = digitalRead(D0);
-	int inpin2 = digitalRead(D2);
+		//RESET INTO DFU MODE
+		FLASH_OTA_Update_SysFlag = 0x0000;
+		Save_SystemFlags();
+		BKP_WriteBackupRegister(BKP_DR10, 0x0000);
 
-	if (inpin1 && inpin2) {
+		USB_Cable_Config(DISABLE);
+		NVIC_SystemReset();	
+	}
+	
+	
+	
+
+	//int inpin1 = digitalRead(D0);
+	//int inpin2 = digitalRead(D2);
+	
+	int doLock = 1;
+
+	//if (inpin1 && inpin2) {
+	if (doLock) {
 		//locking
 		digitalWrite(A0, HIGH);
 		FLASH_WriteProtection_Enable(BOOTLOADER_FLASH_PAGES); 
-		
+	
+		lockDone = 1;
 	}
-	else if (!inpin1 && inpin2) {
+	//if (!inpin1 && inpin2) {
+	else {
+	
 		//unlocking
 		digitalWrite(A1, HIGH);
 		FLASH_WriteProtection_Disable(BOOTLOADER_FLASH_PAGES);
+		
+		unlockDone = 1;
 	}
 
 	delay(50);

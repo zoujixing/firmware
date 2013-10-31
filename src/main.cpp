@@ -119,14 +119,17 @@ int main(void)
 	}
 #endif
 
-#ifdef SPARK_WLAN_ENABLE
+//# ifd ef SPARK_WLAN_ENABLE
 	SPARK_WLAN_Setup(Multicast_Presence_Announcement);
-#endif
+//#e nd if
 
 	/* Main loop */
 	while (1)
 	{
+	
 #ifdef SPARK_WLAN_ENABLE
+
+/*
     uint8_t SOCKET_WAS_CONNECTED = SPARK_SOCKET_CONNECTED;
 		SPARK_WLAN_Loop();
     if (SPARK_SOCKET_CONNECTED)
@@ -160,11 +163,12 @@ int main(void)
         SPARK_LED_FADE = 0;
       }
     }
+	*/
 #endif
 
 #ifdef SPARK_WIRING_ENABLE
 #ifdef SPARK_WLAN_ENABLE
-		if(SPARK_DEVICE_ACKED && !SPARK_FLASH_UPDATE && !IWDG_SYSTEM_RESET)
+		if(!IWDG_SYSTEM_RESET)
 		{
 #endif
 
