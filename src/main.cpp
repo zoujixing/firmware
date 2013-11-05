@@ -123,6 +123,9 @@ int main(void)
 	SPARK_WLAN_Setup(Multicast_Presence_Announcement);
 //#e nd if
 
+	//GO AWAY SILLY PROFLIES
+	SPARK_WLAN_DELETE_PROFILES();
+
 	/* Main loop */
 	while (1)
 	{

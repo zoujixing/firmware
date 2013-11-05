@@ -375,6 +375,13 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 	Clear_NetApp_Dhcp();
 }
 
+void SPARK_WLAN_DELETE_PROFILES(void) {
+	wlan_ioctl_del_profile(255);	
+	NVMEM_Spark_File_Data[WLAN_PROFILE_FILE_OFFSET] = 0;
+	nvmem_write(NVMEM_SPARK_FILE_ID, 1, WLAN_PROFILE_FILE_OFFSET, &NVMEM_Spark_File_Data[WLAN_PROFILE_FILE_OFFSET]);
+	//WLAN_DELETE_PROFILES = 0;
+}
+
 void SPARK_WLAN_Loop(void)
 {
 	if(SPARK_WLAN_RESET || SPARK_WLAN_SLEEP)

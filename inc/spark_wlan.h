@@ -37,6 +37,7 @@ char *WLAN_BootLoader_Patch(unsigned long *length);
 void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void));
 void SPARK_WLAN_Loop(void);
 void SPARK_WLAN_Timing(void);
+void SPARK_WLAN_DELETE_PROFILES(void);
 
 /* Spark Cloud APIs */
 extern int Spark_Connect(void);

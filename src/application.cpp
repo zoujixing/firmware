@@ -43,9 +43,9 @@ void loop()
 		LED_On(LED_RGB);
 		
 		//also delete any saved smart config profiles
-		wlan_ioctl_del_profile(255);
 		
 		delay(1000);
+		
 	}
 	else if (unlockDone) {
 		LED_SetRGBColor(RGB_COLOR_GREEN);
