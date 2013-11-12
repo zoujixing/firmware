@@ -1,8 +1,3 @@
-########################################
-#   @author  Spark Application Team    #
-#   @version V1.0.0                    #
-#   @date    20-June-2013              #
-########################################
 
 -include ../makefile.init
 
@@ -15,19 +10,37 @@ USER_DIR?=user
 -include sources.mk
 -include startup/subdir.mk
 -include src/subdir.mk
+<<<<<<< HEAD
 -include ../$(USER_DIR)/subdir.mk
 -include libraries/STM32_USB-FS-Device_Driver/src/subdir.mk
 -include libraries/STM32F10x_StdPeriph_Driver/src/subdir.mk
 -include libraries/CC3000_Host_Driver/subdir.mk
+=======
+>>>>>>> c98247deb32b5dc081f4bf5c23406533a1374f5c
 -include subdir.mk
 -include objects.mk
 
 ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(strip $(C++_DEPS)),)
+-include $(C++_DEPS)
+endif
 ifneq ($(strip $(C_DEPS)),)
 -include $(C_DEPS)
 endif
 ifneq ($(strip $(ASM_DEPS)),)
 -include $(ASM_DEPS)
+endif
+ifneq ($(strip $(CC_DEPS)),)
+-include $(CC_DEPS)
+endif
+ifneq ($(strip $(CPP_DEPS)),)
+-include $(CPP_DEPS)
+endif
+ifneq ($(strip $(CXX_DEPS)),)
+-include $(CXX_DEPS)
+endif
+ifneq ($(strip $(C_UPPER_DEPS)),)
+-include $(C_UPPER_DEPS)
 endif
 ifneq ($(strip $(S_UPPER_DEPS)),)
 -include $(S_UPPER_DEPS)
@@ -52,7 +65,12 @@ $(CORE_FIRMWARE).siz \
 # All Target
 all: $(CORE_FIRMWARE).elf secondary-outputs
 
+dependents:
+	-cd ../../core-common-lib/build && $(MAKE) clean all
+	-cd ../../core-communication-lib/build && $(MAKE) clean all
+
 # Tool invocations
+<<<<<<< HEAD
 $(CORE_FIRMWARE).elf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target..'
 	arm-none-eabi-gcc -T"../linker/linker_stm32f10x_md_dfu.ld" -nostartfiles -Xlinker --gc-sections -Wl,-Map,$(CORE_FIRMWARE).map -mcpu=cortex-m3 -mthumb -g3 -gdwarf-2 -o "$(CORE_FIRMWARE).elf" $(OBJS) $(USER_OBJS) $(LIBS)
@@ -74,10 +92,49 @@ clean:
 
 post-build:
 	-arm-none-eabi-objcopy -S -O binary "$(CORE_FIRMWARE).elf" "$(CORE_FIRMWARE).bin"
+=======
+core-firmware.elf: $(OBJS) $(USER_OBJS) ../../core-common-lib/build/libcore-common-lib.a ../../core-communication-lib/build/libcore-communication-lib.a
+	@echo 'Building target: $@'
+	@echo 'Invoking: ARM GCC C++ Linker'
+	arm-none-eabi-g++ -T"../linker/linker_stm32f10x_md_dfu.ld" -nostartfiles -Xlinker --gc-sections -o "core-firmware.elf" -L"../../core-common-lib/build" -L"../../core-communication-lib/build" -Wl,-Map,core-firmware.map -mcpu=cortex-m3 -mthumb -g3 -gdwarf-2 $(OBJS) $(USER_OBJS) $(LIBS)
+	@echo 'Finished building target: $@'
+	@echo ' '
+	$(MAKE) --no-print-directory post-build
+
+core-firmware.hex: core-firmware.elf
+	@echo 'Invoking: ARM GNU Create Flash Image'
+	arm-none-eabi-objcopy -O ihex core-firmware.elf  "core-firmware.hex"
+	@echo 'Finished building: $@'
+	@echo ' '
+
+core-firmware.lst: core-firmware.elf
+	@echo 'Invoking: ARM GNU Create Listing'
+	arm-none-eabi-objdump -h -S core-firmware.elf > "core-firmware.lst"
+	@echo 'Finished building: $@'
+	@echo ' '
+
+core-firmware.siz: core-firmware.elf
+	@echo 'Invoking: ARM GNU Print Size'
+	arm-none-eabi-size  --format=berkeley core-firmware.elf
+	@echo 'Finished building: $@'
+	@echo ' '
+
+# Other Targets
+clean:
+	-$(RM) $(OBJS)$(C_DEPS)$(SECONDARY_FLASH)$(CXX_DEPS)$(S_UPPER_DEPS)$(SECONDARY_LIST)$(SECONDARY_SIZE)$(C++_DEPS)$(ASM_DEPS)$(CC_DEPS)$(CPP_DEPS)$(EXECUTABLES)$(C_UPPER_DEPS) core-firmware.elf core-firmware.map core-firmware.bin
+	-@echo ' '
+
+post-build:
+	-@echo 'Create Binary'
+	-arm-none-eabi-objcopy -S -O binary "core-firmware.elf" "core-firmware.bin"
+	-@echo ' '
+>>>>>>> c98247deb32b5dc081f4bf5c23406533a1374f5c
 
 secondary-outputs: $(SECONDARY_FLASH) $(SECONDARY_LIST) $(SECONDARY_SIZE)
 
 .PHONY: all clean dependents
 .SECONDARY: post-build
+../../core-common-lib/build/libcore-common-lib.a:
+../../core-communication-lib/build/libcore-communication-lib.a:
 
 -include ../makefile.targets

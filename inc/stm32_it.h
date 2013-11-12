@@ -12,8 +12,11 @@
 #ifndef __STM32_IT_H
 #define __STM32_IT_H
 
+extern "C" {
+
 /* Includes ------------------------------------------------------------------*/
 #include "platform_config.h"
+#include "cc3000_spi.h"
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -32,14 +35,27 @@ void SVC_Handler(void);
 void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
-#if defined (USE_SPARK_CORE_V02)
-void RTC_IRQHandler(void);
-#endif
-void DMA1_Channel5_IRQHandler(void);
+void ADC1_2_IRQHandler(void);
+void USART2_IRQHandler(void);
+void I2C1_EV_IRQHandler(void);
+void I2C1_ER_IRQHandler(void);
+void SPI1_IRQHandler(void);
+void EXTI0_IRQHandler(void);
+void EXTI1_IRQHandler(void);
 void EXTI2_IRQHandler(void);
+void EXTI3_IRQHandler(void);
+void EXTI4_IRQHandler(void);
+void EXTI9_5_IRQHandler(void);
 void EXTI15_10_IRQHandler(void);
 void TIM1_CC_IRQHandler(void);
+#if defined (USE_SPARK_CORE_V02)
+void RTC_IRQHandler(void);
+void RTCAlarm_IRQHandler(void);
+#endif
+void DMA1_Channel5_IRQHandler(void);
 void USB_LP_CAN1_RX0_IRQHandler(void);
+
+}
 
 #endif /* __STM32_IT_H */
 

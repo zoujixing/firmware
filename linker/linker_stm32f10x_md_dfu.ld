@@ -1,7 +1,7 @@
 /*
 *****************************************************************************
 **
-**  File        : linker_stm32f10x_md.ld
+**  File        : linker_stm32f10x_md_dfu.ld
 **
 **  Abstract    : Linker script for STM32F103CB Device with
 **                128KByte FLASH, 20KByte RAM
@@ -23,7 +23,7 @@
 These are used by the startup in order to allocate stacks for the different modes.
 */
 
-__Stack_Size = 1024 ;
+__Stack_Size = 2048 ;
 
 PROVIDE ( _Stack_Size = __Stack_Size ) ;
 
@@ -35,7 +35,7 @@ PROVIDE ( _Stack_Init = __Stack_Init ) ;
 /*
 There will be a link error if there is not this amount of RAM free at the end.
 */
-_Minimum_Stack_Size = 0x100 ;
+_Minimum_Stack_Size = 0x1400;
 
 /* include the memory spaces definitions sub-script */
 /*
@@ -46,7 +46,7 @@ Linker subscript for STM32F10x definitions with 128K Flash and 20K RAM */
 MEMORY
 {
   RAM (xrw)     : ORIGIN = 0x20000000, LENGTH = 20K
-  FLASH (rx)    : ORIGIN = 0x0800C000, LENGTH = 128K-0xC000
+  FLASH (rx)    : ORIGIN = 0x08005000, LENGTH = 128K-0x5000
   FLASHB1 (rx)  : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB0 (rx) : ORIGIN = 0x00000000, LENGTH = 0
   EXTMEMB1 (rx) : ORIGIN = 0x00000000, LENGTH = 0
@@ -122,6 +122,7 @@ SECTIONS
         _sbss = .;
         
         *(.bss)
+        *(.bss*)
         *(COMMON)
         
 	    . = ALIGN(4);
