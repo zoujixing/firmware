@@ -68,6 +68,31 @@ extern LINE_CODING linecoding;
 /* Private function prototypes -----------------------------------------------*/
 
 /* Private functions ---------------------------------------------------------*/
+__attribute__ ((noinline)) void service_call(void (*func)(void*), void* args){
+	__ASM volatile ("svc 0");
+}
+
+void my_priv_func(void * data){
+    int * my_int;
+    my_int = (int*)data;
+    if (*my_int == 10 ){
+        *my_int = 0;
+    }
+}
+
+void led_toggle(void * data){
+	static int toggle = 0;
+	//for(;;)
+	{
+		toggle = 1-toggle;
+		DIO_SetState((DIO_TypeDef)D1, (DIO_State_TypeDef)toggle);
+	}
+}
+
+void pendsv_handle(void)
+{
+	service_call(led_toggle, NULL);
+}
 
 /*******************************************************************************
  * Function Name  : main.
@@ -94,6 +119,8 @@ int main(void)
 
 	SysTick_Configuration();
 
+	NVIC_SetPriority(PendSV_IRQn, 0x0F); // Set PendSV to lowest level
+
 	/* Enable CRC clock */
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_CRC, ENABLE);
 
@@ -106,6 +133,16 @@ int main(void)
 	RTC_Configuration();
 #endif
 #endif
+
+    int var;
+    var = 10;
+    service_call(my_priv_func, &var); //executes my_priv_func() in interrupt mode
+    if( var == 0 ){
+        //if this is true, that means everything worked
+    	DIO_SetState(D0, HIGH);
+    }
+
+    //while(1);
 
 #ifdef IWDG_RESET_ENABLE
 	/* Check if the system has resumed from IWDG reset */
@@ -221,6 +258,8 @@ int main(void)
  *******************************************************************************/
 void Timing_Decrement(void)
 {
+	*((__IO uint32_t *)0xE000ED04) = 0x10000000; //(1<<28) => trigger PendSV
+
 	TimingMillis++;
 
 	if (TimingDelay != 0x00)

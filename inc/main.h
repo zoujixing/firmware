@@ -79,6 +79,7 @@ extern "C" {
 
 /* Exported functions ------------------------------------------------------- */
 void Timing_Decrement(void);
+void Context_Switch(void);
 
 void USB_USART_Init(uint32_t baudRate);
 uint8_t USB_USART_Available_Data(void);
@@ -87,6 +88,17 @@ void USB_USART_Send_Data(uint8_t Data);
 void Handle_USBAsynchXfer(void);
 void Get_SerialNum(void);
 
+}
+
+#define SP_PROCESS_SIZE             0x200  /* Process stack size */
+#define SP_PROCESS                  0x02   /* Process stack */
+#define SP_MAIN                     0x00   /* Main stack */
+#define THREAD_MODE_PRIVILEGED      0x00   /* Thread mode has privileged access */
+#define THREAD_MODE_UNPRIVILEGED    0x01   /* Thread mode has unprivileged access */
+
+__attribute__( ( always_inline ) ) __STATIC_INLINE void __SVC(void)
+{
+	__ASM volatile ("svc 0x01");
 }
 
 #endif /* __MAIN_H */

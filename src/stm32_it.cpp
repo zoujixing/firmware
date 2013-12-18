@@ -32,6 +32,7 @@
 #include "usb_istr.h"
 
 /* Private typedef -----------------------------------------------------------*/
+typedef void (*svcall_t)(void*);
 
 /* Private define ------------------------------------------------------------*/
 
@@ -51,7 +52,41 @@ void Wiring_SPI1_Interrupt_Handler(void) __attribute__ ((weak));
 void Wiring_EXTI_Interrupt_Handler(uint8_t EXTI_Line_Number) __attribute__ ((weak));
 
 /* Private functions ---------------------------------------------------------*/
+/*
+ * svcall_handler
+ * In this function svc_args points to the stack frame of the SVC caller
+ * function. Up to four 32-Bit sized arguments can be mapped easily:
+ * The first argument (r0) is in svc_args[0],
+ * The second argument (r1) in svc_args[1] and so on..
+ */
+extern "C" {
+void svcall_handler(unsigned int *svc_args)
+{
+	unsigned int svc_number;
+	svcall_t call;
+	void * args;
 
+	/*
+	 * We can extract the SVC number from the SVC instruction. svc_args[6]
+	 * points to the program counter (the code executed just before the svc
+	 * call). We need to add an offset of -2 to get to the upper byte of
+	 * the SVC instruction (the immediate value).
+	 */
+	svc_number = ((char *)svc_args[6])[-2];
+	switch(svc_number)
+	{
+	case 0:
+		call = (svcall_t)svc_args[0];
+		args = (void*)svc_args[1];
+		call(args);
+		break;
+
+	default:
+		/* Unknown SVC */
+		break;
+	}
+}
+}
 /******************************************************************************/
 /*            Cortex-M Processor Exceptions Handlers                         */
 /******************************************************************************/
@@ -136,6 +171,20 @@ void UsageFault_Handler(void)
  *******************************************************************************/
 void SVC_Handler(void)
 {
+	/*
+	 * Get the pointer to the stack frame which was saved before the SVC
+	 * call and use it as first parameter for the C-function (r0)
+	 * All relevant registers (r0 to r3, r12 (scratch register), r14 or lr
+	 * (link register), r15 or pc (programm counter) and xPSR (program
+	 * status register) are saved by hardware.
+	 */
+	__asm volatile (
+			"tst lr, #4			\n"// Test for MSP or PSP
+			"ite eq				\n"
+			"mrseq r0, msp		\n"
+			"mrsne r0, psp		\n"
+			"b svcall_handler	\n"
+	);
 }
 
 /*******************************************************************************
@@ -158,6 +207,8 @@ void DebugMon_Handler(void)
  *******************************************************************************/
 void PendSV_Handler(void)
 {
+	extern void pendsv_handle(void);
+	pendsv_handle();
 }
 
 /*******************************************************************************
