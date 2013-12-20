@@ -32,7 +32,6 @@
 #include "usb_istr.h"
 
 /* Private typedef -----------------------------------------------------------*/
-typedef void (*svcall_t)(void*);
 
 /* Private define ------------------------------------------------------------*/
 
@@ -42,6 +41,7 @@ typedef void (*svcall_t)(void*);
 
 /* Extern variables ----------------------------------------------------------*/
 extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
+extern __IO uint32_t *pxTopOfStack;
 
 /* Private function prototypes -----------------------------------------------*/
 void Wiring_ADC1_2_Interrupt_Handler(void) __attribute__ ((weak));
@@ -52,41 +52,7 @@ void Wiring_SPI1_Interrupt_Handler(void) __attribute__ ((weak));
 void Wiring_EXTI_Interrupt_Handler(uint8_t EXTI_Line_Number) __attribute__ ((weak));
 
 /* Private functions ---------------------------------------------------------*/
-/*
- * svcall_handler
- * In this function svc_args points to the stack frame of the SVC caller
- * function. Up to four 32-Bit sized arguments can be mapped easily:
- * The first argument (r0) is in svc_args[0],
- * The second argument (r1) in svc_args[1] and so on..
- */
-extern "C" {
-void svcall_handler(unsigned int *svc_args)
-{
-	unsigned int svc_number;
-	svcall_t call;
-	void * args;
 
-	/*
-	 * We can extract the SVC number from the SVC instruction. svc_args[6]
-	 * points to the program counter (the code executed just before the svc
-	 * call). We need to add an offset of -2 to get to the upper byte of
-	 * the SVC instruction (the immediate value).
-	 */
-	svc_number = ((char *)svc_args[6])[-2];
-	switch(svc_number)
-	{
-	case 0:
-		call = (svcall_t)svc_args[0];
-		args = (void*)svc_args[1];
-		call(args);
-		break;
-
-	default:
-		/* Unknown SVC */
-		break;
-	}
-}
-}
 /******************************************************************************/
 /*            Cortex-M Processor Exceptions Handlers                         */
 /******************************************************************************/
@@ -171,20 +137,7 @@ void UsageFault_Handler(void)
  *******************************************************************************/
 void SVC_Handler(void)
 {
-	/*
-	 * Get the pointer to the stack frame which was saved before the SVC
-	 * call and use it as first parameter for the C-function (r0)
-	 * All relevant registers (r0 to r3, r12 (scratch register), r14 or lr
-	 * (link register), r15 or pc (programm counter) and xPSR (program
-	 * status register) are saved by hardware.
-	 */
-	__asm volatile (
-			"tst lr, #4			\n"// Test for MSP or PSP
-			"ite eq				\n"
-			"mrseq r0, msp		\n"
-			"mrsne r0, psp		\n"
-			"b svcall_handler	\n"
-	);
+
 }
 
 /*******************************************************************************
@@ -207,8 +160,48 @@ void DebugMon_Handler(void)
  *******************************************************************************/
 void PendSV_Handler(void)
 {
-	extern void pendsv_handle(void);
-	pendsv_handle();
+	__asm volatile
+	(
+			"	mrs r0, psp							\n"
+			"										\n"
+			"	ldr	r3, pxCurrentTCBConst			\n" /* Get the location of the current TCB. */
+			"	ldr	r2, [r3]						\n"
+			"										\n"
+			"	stmdb r0!, {r4-r11}					\n" /* Save the remaining registers. */
+			"	str r0, [r2]						\n" /* Save the new top of stack into the first member of the TCB. */
+			"										\n"
+			"	stmdb sp!, {r3, r14}				\n"
+//			"	mov r0, %0							\n"
+//			"	msr basepri, r0						\n"
+//			"	bl vTaskSwitchContext				\n"
+	);
+
+	extern void Task2(void);
+	pxTopOfStack--; /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts. */
+	*pxTopOfStack = 0x01000000UL;	/* xPSR */
+	pxTopOfStack--;
+	*pxTopOfStack = (uint32_t)Task2;	/* PC */
+	pxTopOfStack--;
+	*pxTopOfStack = 0;	/* LR */
+	pxTopOfStack -= 5;	/* R12, R3, R2 and R1. */
+	*pxTopOfStack = NULL;	/* R0 */
+	pxTopOfStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
+
+	__asm volatile
+	(
+			"	mov r0, #0							\n"
+			"	msr basepri, r0						\n"
+			"	ldmia sp!, {r3, r14}				\n"
+			"										\n"	/* Restore the context, including the critical nesting count. */
+			"	ldr r1, [r3]						\n"
+			"	ldr r0, [r1]						\n" /* The first item in pxCurrentTCB is the task top of stack. */
+			"	ldmia r0!, {r4-r11}					\n" /* Pop the registers. */
+			"	msr psp, r0							\n"
+			"	bx r14								\n"
+			"										\n"
+			"	.align 2							\n"
+			"pxCurrentTCBConst: .word pxTopOfStack	\n"
+	);
 }
 
 /*******************************************************************************
@@ -221,6 +214,8 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
 	Timing_Decrement();
+
+	*((__IO uint32_t *)0xE000ED04) = 0x10000000; //(1<<28) => trigger PendSV
 }
 
 /******************************************************************************/

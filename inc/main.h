@@ -98,7 +98,7 @@ void Get_SerialNum(void);
 
 __attribute__( ( always_inline ) ) __STATIC_INLINE void __SVC(void)
 {
-	__ASM volatile ("svc 0x01");
+	__ASM volatile ("svc 0");
 }
 
 #endif /* __MAIN_H */

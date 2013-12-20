@@ -42,6 +42,10 @@ extern "C" {
 /* Private macro -------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
+__IO uint8_t PSPMemAlloc[SP_PROCESS_SIZE];
+__IO uint32_t Index = 0, MSPValue = 0, PSPValue, CurrentStack = 0, ThreadMode = 0;
+__IO uint32_t *pxTopOfStack = NULL;
+
 __IO uint32_t TimingMillis;
 
 uint8_t ApplicationSetupOnce = 0;
@@ -68,30 +72,25 @@ extern LINE_CODING linecoding;
 /* Private function prototypes -----------------------------------------------*/
 
 /* Private functions ---------------------------------------------------------*/
-__attribute__ ((noinline)) void service_call(void (*func)(void*), void* args){
-	__ASM volatile ("svc 0");
-}
 
-void my_priv_func(void * data){
-    int * my_int;
-    my_int = (int*)data;
-    if (*my_int == 10 ){
-        *my_int = 0;
-    }
-}
-
-void led_toggle(void * data){
-	static int toggle = 0;
-	//for(;;)
+void Task1(void){
+	static int toggle1 = 0;
+	while(1)
 	{
-		toggle = 1-toggle;
-		DIO_SetState((DIO_TypeDef)D1, (DIO_State_TypeDef)toggle);
+		toggle1 = 1-toggle1;
+		DIO_SetState((DIO_TypeDef)D0, (DIO_State_TypeDef)toggle1);
+		Delay(200);
 	}
 }
 
-void pendsv_handle(void)
-{
-	service_call(led_toggle, NULL);
+void Task2(void){
+	static int toggle2 = 0;
+	while(1)
+	{
+		toggle2 = 1-toggle2;
+		DIO_SetState((DIO_TypeDef)D1, (DIO_State_TypeDef)toggle2);
+		Delay(200);
+	}
 }
 
 /*******************************************************************************
@@ -119,7 +118,8 @@ int main(void)
 
 	SysTick_Configuration();
 
-	NVIC_SetPriority(PendSV_IRQn, 0x0F); // Set PendSV to lowest level
+	NVIC_SetPriority(PendSV_IRQn, PENDSV_IRQ_PRIORITY);
+	NVIC_SetPriority(SVCall_IRQn, SVCALL_IRQ_PRIORITY);
 
 	/* Enable CRC clock */
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_CRC, ENABLE);
@@ -134,15 +134,24 @@ int main(void)
 #endif
 #endif
 
-    int var;
-    var = 10;
-    service_call(my_priv_func, &var); //executes my_priv_func() in interrupt mode
-    if( var == 0 ){
-        //if this is true, that means everything worked
-    	DIO_SetState(D0, HIGH);
-    }
+	/* Initialize memory reserved for Process Stack */
+	for(Index = 0; Index < SP_PROCESS_SIZE; Index++)
+	{
+		PSPMemAlloc[Index] = 0x00;
+	}
 
-    //while(1);
+	/* Set Process stack value */
+	PSPValue = (uint32_t)PSPMemAlloc + SP_PROCESS_SIZE;
+	pxTopOfStack = &PSPValue;
+
+	__set_PSP(PSPValue);
+
+	/* Select Process Stack as Thread mode Stack */
+	__set_CONTROL(SP_PROCESS);
+
+	Task1();
+
+	while(1);
 
 #ifdef IWDG_RESET_ENABLE
 	/* Check if the system has resumed from IWDG reset */
@@ -258,8 +267,6 @@ int main(void)
  *******************************************************************************/
 void Timing_Decrement(void)
 {
-	*((__IO uint32_t *)0xE000ED04) = 0x10000000; //(1<<28) => trigger PendSV
-
 	TimingMillis++;
 
 	if (TimingDelay != 0x00)
