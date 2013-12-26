@@ -41,6 +41,7 @@
 
 /* Extern variables ----------------------------------------------------------*/
 extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
+extern __IO uint32_t MSPValue, PSPValue;
 extern __IO uint32_t *pxTopOfStack;
 
 /* Private function prototypes -----------------------------------------------*/
@@ -137,7 +138,16 @@ void UsageFault_Handler(void)
  *******************************************************************************/
 void SVC_Handler(void)
 {
+	__set_PSP((uint32_t)pxTopOfStack);
 
+	__asm volatile
+	(
+//			"MSR psp, %0		\n"
+//			"ORR r14, #0xd		\n"
+			"ORR lr, lr, #4		\n"//change EXC_RETURN for return on PSP
+			"BX lr				\n"//return from Handler to Thread
+//			: : "r" (pxTopOfStack)
+	);
 }
 
 /*******************************************************************************
@@ -160,48 +170,10 @@ void DebugMon_Handler(void)
  *******************************************************************************/
 void PendSV_Handler(void)
 {
-	__asm volatile
-	(
-			"	mrs r0, psp							\n"
-			"										\n"
-			"	ldr	r3, pxCurrentTCBConst			\n" /* Get the location of the current TCB. */
-			"	ldr	r2, [r3]						\n"
-			"										\n"
-			"	stmdb r0!, {r4-r11}					\n" /* Save the remaining registers. */
-			"	str r0, [r2]						\n" /* Save the new top of stack into the first member of the TCB. */
-			"										\n"
-			"	stmdb sp!, {r3, r14}				\n"
-//			"	mov r0, %0							\n"
-//			"	msr basepri, r0						\n"
-//			"	bl vTaskSwitchContext				\n"
-	);
-
-	extern void Task2(void);
-	pxTopOfStack--; /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts. */
-	*pxTopOfStack = 0x01000000UL;	/* xPSR */
-	pxTopOfStack--;
-	*pxTopOfStack = (uint32_t)Task2;	/* PC */
-	pxTopOfStack--;
-	*pxTopOfStack = 0;	/* LR */
-	pxTopOfStack -= 5;	/* R12, R3, R2 and R1. */
-	*pxTopOfStack = NULL;	/* R0 */
-	pxTopOfStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
-
-	__asm volatile
-	(
-			"	mov r0, #0							\n"
-			"	msr basepri, r0						\n"
-			"	ldmia sp!, {r3, r14}				\n"
-			"										\n"	/* Restore the context, including the critical nesting count. */
-			"	ldr r1, [r3]						\n"
-			"	ldr r0, [r1]						\n" /* The first item in pxCurrentTCB is the task top of stack. */
-			"	ldmia r0!, {r4-r11}					\n" /* Pop the registers. */
-			"	msr psp, r0							\n"
-			"	bx r14								\n"
-			"										\n"
-			"	.align 2							\n"
-			"pxCurrentTCBConst: .word pxTopOfStack	\n"
-	);
+//	__asm volatile
+//	(
+//
+//	);
 }
 
 /*******************************************************************************

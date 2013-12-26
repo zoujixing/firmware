@@ -116,10 +116,32 @@ int main(void)
 
 	Set_System();
 
-	SysTick_Configuration();
+	/* Initialize memory reserved for Process Stack */
+	for(Index = 0; Index < SP_PROCESS_SIZE; Index++)
+	{
+		PSPMemAlloc[Index] = 0x00;
+	}
 
-	NVIC_SetPriority(PendSV_IRQn, PENDSV_IRQ_PRIORITY);
-	NVIC_SetPriority(SVCall_IRQn, SVCALL_IRQ_PRIORITY);
+	/* Set Process stack value */
+	PSPValue = (uint32_t)PSPMemAlloc + SP_PROCESS_SIZE;
+	pxTopOfStack = (uint32_t *)PSPValue;
+
+	pxTopOfStack--; /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts. */
+	*pxTopOfStack = 0x01000000UL;	/* xPSR */
+	pxTopOfStack--;
+	*pxTopOfStack = (uint32_t)Task2;	/* PC */
+	pxTopOfStack--;
+	*pxTopOfStack = 0;	/* LR */
+	pxTopOfStack -= 5;	/* R12, R3, R2 and R1. */
+	*pxTopOfStack = NULL;	/* R0 */
+	//pxTopOfStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
+
+	//__set_PSP((uint32_t)pxTopOfStack);
+
+	NVIC_SetPriority(PendSV_IRQn, 15);
+	NVIC_SetPriority(SVCall_IRQn, 15);
+
+	SysTick_Configuration();
 
 	/* Enable CRC clock */
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_CRC, ENABLE);
@@ -134,20 +156,7 @@ int main(void)
 #endif
 #endif
 
-	/* Initialize memory reserved for Process Stack */
-	for(Index = 0; Index < SP_PROCESS_SIZE; Index++)
-	{
-		PSPMemAlloc[Index] = 0x00;
-	}
-
-	/* Set Process stack value */
-	PSPValue = (uint32_t)PSPMemAlloc + SP_PROCESS_SIZE;
-	pxTopOfStack = &PSPValue;
-
-	__set_PSP(PSPValue);
-
-	/* Select Process Stack as Thread mode Stack */
-	__set_CONTROL(SP_PROCESS);
+	__SVC();
 
 	Task1();
 
