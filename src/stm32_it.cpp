@@ -34,6 +34,7 @@
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
+#define EXC_RETURN		0xfffffffd
 
 /* Private macro -------------------------------------------------------------*/
 
@@ -174,6 +175,44 @@ void PendSV_Handler(void)
 //	(
 //
 //	);
+
+	__ASM volatile (
+			"cpsid i\t\n"
+
+			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+			"ite eq\t\n"
+			"mrseq R0, msp\t\n"
+			"mrsne R0, psp\t\n"
+			"stmdb R0!, {R4-R11}\t\n"
+			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+			"ite eq\t\n"
+			"msreq msp, R0\t\n"
+			"msrne psp, R0\t\n"
+
+			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+			"ite eq\t\n"
+			"mrseq R0, psp\t\n"
+			"mrsne R0, msp\t\n"
+			"ldmia R0!, {R4-R11}\t\n"
+			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+			"ite eq\t\n"
+			"msreq psp, R0\t\n"
+			"msrne msp, R0\t\n"
+
+			"eor lr, lr, #4\t\n"
+//			"ldr lr, =0xfffffff9\t\n"
+//			"ldr lr, =0xfffffffd\t\n"
+
+//			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+//			"ite eq\t\n"
+//			"ldreq lr, =0xfffffffd\t\n"
+//			"ldrne lr, =0xfffffff9\t\n"
+
+			"cpsie i\t\n"
+
+//			"bx lr\t\n"
+	);
+
 }
 
 /*******************************************************************************
@@ -185,9 +224,18 @@ void PendSV_Handler(void)
  *******************************************************************************/
 void SysTick_Handler(void)
 {
-	Timing_Decrement();
+//	if(__get_SP() == __get_PSP())
+//	{
+//		LED_SetRGBColor(RGB_COLOR_GREEN);
+//		LED_On(LED_RGB);
+//	}
+//	else if(__get_SP() == __get_MSP())
+//	{
+//		LED_SetRGBColor(RGB_COLOR_RED);
+//		LED_On(LED_RGB);
+//	}
 
-	*((__IO uint32_t *)0xE000ED04) = 0x10000000; //(1<<28) => trigger PendSV
+	Timing_Decrement();
 }
 
 /******************************************************************************/

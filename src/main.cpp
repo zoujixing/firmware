@@ -48,6 +48,8 @@ __IO uint32_t *pxTopOfStack = NULL;
 
 __IO uint32_t TimingMillis;
 
+__IO uint32_t TimingPendSV;
+
 uint8_t ApplicationSetupOnce = 0;
 
 uint8_t  USART_Rx_Buffer[USART_RX_DATA_SIZE];
@@ -77,9 +79,30 @@ void Task1(void){
 	static int toggle1 = 0;
 	while(1)
 	{
+//		if(__get_CONTROL() == SP_MAIN)
+//		{
+//			LED_SetRGBColor(RGB_COLOR_RED);
+//			LED_On(LED_RGB);
+//		}
+
 		toggle1 = 1-toggle1;
 		DIO_SetState((DIO_TypeDef)D0, (DIO_State_TypeDef)toggle1);
-		Delay(200);
+		Delay(50);
+
+//		DIO_SetState(D0, HIGH);
+//		DIO_SetState(D1, LOW);
+//
+//		LED_SetRGBColor(RGB_COLOR_RED);
+//		LED_On(LED_RGB);
+//		Delay(1000);
+//
+//		LED_SetRGBColor(RGB_COLOR_GREEN);
+//		LED_On(LED_RGB);
+//		Delay(1000);
+//
+//		LED_SetRGBColor(RGB_COLOR_BLUE);
+//		LED_On(LED_RGB);
+//		Delay(1000);
 	}
 }
 
@@ -87,9 +110,30 @@ void Task2(void){
 	static int toggle2 = 0;
 	while(1)
 	{
+//		if(__get_CONTROL() == SP_PROCESS)
+//		{
+//			LED_SetRGBColor(RGB_COLOR_GREEN);
+//			LED_On(LED_RGB);
+//		}
+
 		toggle2 = 1-toggle2;
 		DIO_SetState((DIO_TypeDef)D1, (DIO_State_TypeDef)toggle2);
-		Delay(200);
+		Delay_Microsecond(50000);
+
+//		DIO_SetState(D1, HIGH);
+//		DIO_SetState(D0, LOW);
+//
+//		LED_SetRGBColor(RGB_COLOR_YELLOW);
+//		LED_On(LED_RGB);
+//		Delay(1000);
+//
+//		LED_SetRGBColor(RGB_COLOR_CYAN);
+//		LED_On(LED_RGB);
+//		Delay(1000);
+//
+//		LED_SetRGBColor(RGB_COLOR_MAGENTA);
+//		LED_On(LED_RGB);
+//		Delay(1000);
 	}
 }
 
@@ -134,9 +178,9 @@ int main(void)
 	*pxTopOfStack = 0;	/* LR */
 	pxTopOfStack -= 5;	/* R12, R3, R2 and R1. */
 	*pxTopOfStack = NULL;	/* R0 */
-	//pxTopOfStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
+	pxTopOfStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
 
-	//__set_PSP((uint32_t)pxTopOfStack);
+	__set_PSP((uint32_t)pxTopOfStack);
 
 	NVIC_SetPriority(PendSV_IRQn, 15);
 	NVIC_SetPriority(SVCall_IRQn, 15);
@@ -156,11 +200,9 @@ int main(void)
 #endif
 #endif
 
-	__SVC();
+	//__SVC();
 
 	Task1();
-
-	while(1);
 
 #ifdef IWDG_RESET_ENABLE
 	/* Check if the system has resumed from IWDG reset */
@@ -387,6 +429,9 @@ void Timing_Decrement(void)
 		TimingIWDGReload++;
 	}
 #endif
+
+	*((__IO uint32_t *)0xE000ED04) = 0x10000000; //(1<<28) => trigger PendSV
+
 }
 
 /*******************************************************************************

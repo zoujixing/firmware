@@ -101,4 +101,25 @@ __attribute__( ( always_inline ) ) __STATIC_INLINE void __SVC(void)
 	__ASM volatile ("svc 0");
 }
 
+__attribute__( ( always_inline ) ) __STATIC_INLINE uint32_t __get_SP(void)
+{
+	register uint32_t result;
+
+	__ASM volatile (
+			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
+			"ite eq\t\n"
+			"mrseq %0, msp\t\n"
+			"mrsne %0, psp\t\n"
+			: "=r" (result)
+	);
+
+	return(result);
+}
+
+__attribute__( ( always_inline ) ) __STATIC_INLINE void __TEST(void)
+{
+	__ASM volatile ("EOR lr, lr, #4");
+}
+
+
 #endif /* __MAIN_H */
