@@ -492,7 +492,8 @@ void analogWrite(uint16_t pin, uint8_t value)
  */
 unsigned long millis(void)
 {
-	return TimingMillis;
+	//return TimingMillis;
+	return (DWT->CYCCNT / MS_TICKS);
 }
 
 /*
@@ -508,7 +509,9 @@ unsigned long micros(void)
  */
 void delay(unsigned long ms)
 {
-	Delay(ms);
+	unsigned long _millis = millis() + ms;
+
+	while (_millis > millis());
 }
 
 /*

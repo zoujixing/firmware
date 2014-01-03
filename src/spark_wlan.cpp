@@ -28,19 +28,27 @@
 
 tNetappIpconfigRetArgs ip_config;
 
-__IO uint32_t TimingSparkCommTimeout;
+volatile uint32_t TimingSparkCommTimeout;
 
-uint8_t WLAN_MANUAL_CONNECT = 0; //For Manual connection, set this to 1
-uint8_t WLAN_DELETE_PROFILES;
-uint8_t WLAN_SMART_CONFIG_START;
-uint8_t WLAN_SMART_CONFIG_STOP;
-uint8_t WLAN_SMART_CONFIG_FINISHED;
-uint8_t WLAN_SERIAL_CONFIG_DONE;
-uint8_t WLAN_CONNECTED;
-uint8_t WLAN_DHCP;
-uint8_t WLAN_CAN_SHUTDOWN;
+volatile uint8_t WLAN_MANUAL_CONNECT = 0; //For Manual connection, set this to 1
+volatile uint8_t WLAN_DELETE_PROFILES;
+volatile uint8_t WLAN_SMART_CONFIG_START;
+volatile uint8_t WLAN_SMART_CONFIG_STOP;
+volatile uint8_t WLAN_SMART_CONFIG_FINISHED;
+volatile uint8_t WLAN_SERIAL_CONFIG_DONE;
+volatile uint8_t WLAN_CONNECTED;
+volatile uint8_t WLAN_DHCP;
+volatile uint8_t WLAN_CAN_SHUTDOWN;
 
-void (*announce_presence)(void);
+volatile uint8_t SPARK_WLAN_RESET;
+volatile uint8_t SPARK_WLAN_SLEEP;
+volatile uint8_t SPARK_WLAN_STARTED;
+volatile uint8_t SPARK_SOCKET_CONNECTED;
+volatile uint8_t SPARK_HANDSHAKE_COMPLETED;
+volatile uint8_t SPARK_FLASH_UPDATE;
+volatile uint8_t SPARK_LED_FADE;
+
+volatile uint8_t Spark_Error_Count;
 
 unsigned char patchVer[2];
 
@@ -61,15 +69,7 @@ unsigned char wlan_profile_index;
 
 unsigned char NVMEM_Spark_File_Data[NVMEM_SPARK_FILE_SIZE];
 
-__IO uint8_t SPARK_WLAN_RESET;
-__IO uint8_t SPARK_WLAN_SLEEP;
-__IO uint8_t SPARK_WLAN_STARTED;
-__IO uint8_t SPARK_SOCKET_CONNECTED;
-__IO uint8_t SPARK_HANDSHAKE_COMPLETED;
-__IO uint8_t SPARK_FLASH_UPDATE;
-__IO uint8_t SPARK_LED_FADE;
-
-__IO uint8_t Spark_Error_Count;
+void (*announce_presence)(void);
 
 int Internet_Test(void);
 

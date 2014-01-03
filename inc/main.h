@@ -79,7 +79,6 @@ extern "C" {
 
 /* Exported functions ------------------------------------------------------- */
 void Timing_Decrement(void);
-void Context_Switch(void);
 
 void USB_USART_Init(uint32_t baudRate);
 uint8_t USB_USART_Available_Data(void);
@@ -90,7 +89,12 @@ void Get_SerialNum(void);
 
 }
 
-#define SP_PROCESS_SIZE             0x200  /* Process stack size */
+extern void delay(unsigned long ms);
+
+#define NVIC_INT_CTRL				*((__IO uint32_t *)0xE000ED04)
+#define NVIC_PENDSVSET				(1 << 28)	//0x10000000
+
+#define SP_PROCESS_SIZE             0x300  /* Process stack size */
 #define SP_PROCESS                  0x02   /* Process stack */
 #define SP_MAIN                     0x00   /* Main stack */
 #define THREAD_MODE_PRIVILEGED      0x00   /* Thread mode has privileged access */
@@ -116,10 +120,12 @@ __attribute__( ( always_inline ) ) __STATIC_INLINE uint32_t __get_SP(void)
 	return(result);
 }
 
-__attribute__( ( always_inline ) ) __STATIC_INLINE void __TEST(void)
+__attribute__( ( always_inline ) ) __STATIC_INLINE void __toggle_SP(void)
 {
-	__ASM volatile ("EOR lr, lr, #4");
+	__ASM volatile (
+			"EOR lr, lr, #4	\n"
+			"BX lr	\n"
+	);
 }
-
 
 #endif /* __MAIN_H */

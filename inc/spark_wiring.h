@@ -45,7 +45,8 @@
 #define HIGH 0x1
 #define LOW 0x0
 
-#define US_TICKS (SystemCoreClock / 1000000)//cycles per microsecond
+#define US_TICKS (SystemCoreClock / 1000000)	//cycles per microsecond
+#define MS_TICKS (SystemCoreClock / 1000)		//cycles per millisecond
 
 //#define NULL ((void *)0)
 #define NONE ((uint8_t)0xFF)

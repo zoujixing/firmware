@@ -34,7 +34,6 @@
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
-#define EXC_RETURN		0xfffffffd
 
 /* Private macro -------------------------------------------------------------*/
 
@@ -42,8 +41,8 @@
 
 /* Extern variables ----------------------------------------------------------*/
 extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
-extern __IO uint32_t MSPValue, PSPValue;
-extern __IO uint32_t *pxTopOfStack;
+extern __IO uint32_t *topOfProcStack;
+extern __IO uint32_t *topOfMainStack;
 
 /* Private function prototypes -----------------------------------------------*/
 void Wiring_ADC1_2_Interrupt_Handler(void) __attribute__ ((weak));
@@ -139,15 +138,15 @@ void UsageFault_Handler(void)
  *******************************************************************************/
 void SVC_Handler(void)
 {
-	__set_PSP((uint32_t)pxTopOfStack);
+	//	__set_PSP((uint32_t)topOfProcStack);
 
 	__asm volatile
 	(
-//			"MSR psp, %0		\n"
-//			"ORR r14, #0xd		\n"
-			"ORR lr, lr, #4		\n"//change EXC_RETURN for return on PSP
-			"BX lr				\n"//return from Handler to Thread
-//			: : "r" (pxTopOfStack)
+			"LDR R1, =topOfProcStack	\n"
+			"LDR R0, [R1]				\n"
+			"MSR psp, R0				\n"
+			"ORR lr, lr, #4				\n"//change EXC_RETURN for return on PSP
+			"BX lr						\n"//return from Handler to Thread
 	);
 }
 
@@ -171,48 +170,50 @@ void DebugMon_Handler(void)
  *******************************************************************************/
 void PendSV_Handler(void)
 {
-//	__asm volatile
-//	(
-//
-//	);
-
 	__ASM volatile (
-			"cpsid i\t\n"
+			"cpsid i					\n"
 
-			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-			"ite eq\t\n"
-			"mrseq R0, msp\t\n"
-			"mrsne R0, psp\t\n"
-			"stmdb R0!, {R4-R11}\t\n"
-			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-			"ite eq\t\n"
-			"msreq msp, R0\t\n"
-			"msrne psp, R0\t\n"
+			"ldr R0, =topOfMainStack	\n"
+			"ldr R1, =topOfProcStack	\n"
 
-			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-			"ite eq\t\n"
-			"mrseq R0, psp\t\n"
-			"mrsne R0, msp\t\n"
-			"ldmia R0!, {R4-R11}\t\n"
-			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-			"ite eq\t\n"
-			"msreq psp, R0\t\n"
-			"msrne msp, R0\t\n"
+			"tst lr, #4					\n" /* Check EXC_RETURN */
+			"ite eq						\n"
+			"mrseq R12, msp				\n"
+			"mrsne R12, psp				\n"
+			"stmdb R12!, {R4-R11}		\n"
+			"tst lr, #4					\n"
+			"ite eq						\n"
+			"streq R12, [R0]			\n"
+			"strne R12, [R1]			\n"
+//			"msreq msp, R12				\n"
+//			"msrne psp, R12				\n"
 
-			"eor lr, lr, #4\t\n"
-//			"ldr lr, =0xfffffff9\t\n"
-//			"ldr lr, =0xfffffffd\t\n"
+			"tst lr, #4					\n"
+			"ite eq						\n"
+			"ldreq R12, [R1]			\n"
+			"ldrne R12, [R0]			\n"
+//			"mrseq R12, psp				\n"
+//			"mrsne R12, msp				\n"
+			"ldmia R12!, {R4-R11}		\n"
+			"tst lr, #4					\n"
+			"ite eq						\n"
+			"msreq psp, R12				\n"
+			"msrne msp, R12				\n"
 
-//			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-//			"ite eq\t\n"
-//			"ldreq lr, =0xfffffffd\t\n"
-//			"ldrne lr, =0xfffffff9\t\n"
+			"cpsie i					\n"
 
-			"cpsie i\t\n"
+//			"ldr lr, =0xfffffff9		\n"	/* Main Thread Return */
+//			"ldr lr, =0xfffffffd		\n"	/* Process Thread Return */
 
-//			"bx lr\t\n"
+//			"tst lr, #4					\n" /* Check EXC_RETURN[2] */
+//			"ite eq						\n"
+//			"ldreq lr, =0xfffffffd		\n"
+//			"ldrne lr, =0xfffffff9		\n"
+
+			"eor lr, lr, #4				\n"
+
+//			"bx lr						\n"
 	);
-
 }
 
 /*******************************************************************************
@@ -224,17 +225,6 @@ void PendSV_Handler(void)
  *******************************************************************************/
 void SysTick_Handler(void)
 {
-//	if(__get_SP() == __get_PSP())
-//	{
-//		LED_SetRGBColor(RGB_COLOR_GREEN);
-//		LED_On(LED_RGB);
-//	}
-//	else if(__get_SP() == __get_MSP())
-//	{
-//		LED_SetRGBColor(RGB_COLOR_RED);
-//		LED_On(LED_RGB);
-//	}
-
 	Timing_Decrement();
 }
 
