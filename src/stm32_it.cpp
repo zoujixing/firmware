@@ -38,11 +38,10 @@
 /* Private macro -------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
+__IO uint32_t activeProcStack;	//0 or 1
 
 /* Extern variables ----------------------------------------------------------*/
 extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
-extern __IO uint32_t *topOfProcStack;
-extern __IO uint32_t *topOfMainStack;
 
 /* Private function prototypes -----------------------------------------------*/
 void Wiring_ADC1_2_Interrupt_Handler(void) __attribute__ ((weak));
@@ -138,15 +137,18 @@ void UsageFault_Handler(void)
  *******************************************************************************/
 void SVC_Handler(void)
 {
-	//	__set_PSP((uint32_t)topOfProcStack);
-
-	__asm volatile
+	__ASM volatile
 	(
-			"LDR R1, =topOfProcStack	\n"
-			"LDR R0, [R1]				\n"
-			"MSR psp, R0				\n"
-			"ORR lr, lr, #4				\n"//change EXC_RETURN for return on PSP
-			"BX lr						\n"//return from Handler to Thread
+			"LDR R0, =topOfProcStack0	\n"
+			"LDR R1, [R0]				\n"
+			"LDR R2, =activeProcStack	\n"
+			"LDR R3, [R2]				\n"
+			"MOV R3, #0					\n"
+			"STR R3, [R2]				\n"
+			"LDMIA R1!, {R4-R11}		\n"
+			"MSR PSP, R1				\n"
+			"ORR LR, LR, #4				\n"
+			"BX LR						\n"
 	);
 }
 
@@ -170,49 +172,29 @@ void DebugMon_Handler(void)
  *******************************************************************************/
 void PendSV_Handler(void)
 {
-	__ASM volatile (
-			"cpsid i					\n"
-
-			"ldr R0, =topOfMainStack	\n"
-			"ldr R1, =topOfProcStack	\n"
-
-			"tst lr, #4					\n" /* Check EXC_RETURN */
-			"ite eq						\n"
-			"mrseq R12, msp				\n"
-			"mrsne R12, psp				\n"
-			"stmdb R12!, {R4-R11}		\n"
-			"tst lr, #4					\n"
-			"ite eq						\n"
-			"streq R12, [R0]			\n"
-			"strne R12, [R1]			\n"
-//			"msreq msp, R12				\n"
-//			"msrne psp, R12				\n"
-
-			"tst lr, #4					\n"
-			"ite eq						\n"
-			"ldreq R12, [R1]			\n"
-			"ldrne R12, [R0]			\n"
-//			"mrseq R12, psp				\n"
-//			"mrsne R12, msp				\n"
-			"ldmia R12!, {R4-R11}		\n"
-			"tst lr, #4					\n"
-			"ite eq						\n"
-			"msreq psp, R12				\n"
-			"msrne msp, R12				\n"
-
-			"cpsie i					\n"
-
-//			"ldr lr, =0xfffffff9		\n"	/* Main Thread Return */
-//			"ldr lr, =0xfffffffd		\n"	/* Process Thread Return */
-
-//			"tst lr, #4					\n" /* Check EXC_RETURN[2] */
-//			"ite eq						\n"
-//			"ldreq lr, =0xfffffffd		\n"
-//			"ldrne lr, =0xfffffff9		\n"
-
-			"eor lr, lr, #4				\n"
-
-//			"bx lr						\n"
+	__ASM volatile
+	(
+			"CPSID I					\n"
+			"LDR R0, =topOfProcStack0	\n"
+			"LDR R1, =topOfProcStack1	\n"
+			"LDR R2, =activeProcStack	\n"
+			"LDR R3, [R2]				\n"
+			"MRS R12, PSP				\n"
+			"STMDB R12!, {R4-R11}		\n"
+			"TST R3, #1					\n"
+			"ITE EQ						\n"
+			"STREQ R12, [R0]			\n"
+			"STRNE R12, [R1]			\n"
+			"EOR R3, R3, #1				\n"
+			"STR R3, [R2]				\n"
+			"TST R3, #1					\n"
+			"ITE EQ						\n"
+			"LDREQ R12, [R0]			\n"
+			"LDRNE R12, [R1]			\n"
+			"LDMIA R12!, {R4-R11}		\n"
+			"MSR PSP, R12				\n"
+			"CPSIE I					\n"
+			"BX LR						\n"
 	);
 }
 

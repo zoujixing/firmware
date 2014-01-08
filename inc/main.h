@@ -92,39 +92,17 @@ void Get_SerialNum(void);
 extern void delay(unsigned long ms);
 
 #define NVIC_INT_CTRL				*((__IO uint32_t *)0xE000ED04)
-#define NVIC_PENDSVSET				(1 << 28)	//0x10000000
+#define NVIC_PENDSVSET				(1UL << 28UL)	//0x10000000
+#define NVIC_PENDSVCLR				(1UL << 27UL)	//0x08000000
 
-#define SP_PROCESS_SIZE             0x300  /* Process stack size */
-#define SP_PROCESS                  0x02   /* Process stack */
-#define SP_MAIN                     0x00   /* Main stack */
-#define THREAD_MODE_PRIVILEGED      0x00   /* Thread mode has privileged access */
-#define THREAD_MODE_UNPRIVILEGED    0x01   /* Thread mode has unprivileged access */
+#define PROCESS_STACK0_SIZE			0x800  /* Process stack0 size */
+#define PROCESS_STACK1_SIZE			0x100  /* Process stack1 size */
 
 __attribute__( ( always_inline ) ) __STATIC_INLINE void __SVC(void)
 {
-	__ASM volatile ("svc 0");
-}
-
-__attribute__( ( always_inline ) ) __STATIC_INLINE uint32_t __get_SP(void)
-{
-	register uint32_t result;
-
-	__ASM volatile (
-			"tst lr, #4\t\n" /* Check EXC_RETURN[2] */
-			"ite eq\t\n"
-			"mrseq %0, msp\t\n"
-			"mrsne %0, psp\t\n"
-			: "=r" (result)
-	);
-
-	return(result);
-}
-
-__attribute__( ( always_inline ) ) __STATIC_INLINE void __toggle_SP(void)
-{
-	__ASM volatile (
-			"EOR lr, lr, #4	\n"
-			"BX lr	\n"
+	__ASM volatile
+	(
+			"SVC 0				\n"
 	);
 }
 

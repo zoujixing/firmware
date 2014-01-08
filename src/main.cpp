@@ -38,14 +38,15 @@ extern "C" {
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
-#undef SPARK_WLAN_ENABLE	//comment this line to enable WLAN (currently UNSTABLE)
+//#undef SPARK_WLAN_ENABLE	//comment this line to enable WLAN (currently UNSTABLE)
 
 /* Private macro -------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-__IO uint8_t PSPMemAlloc[SP_PROCESS_SIZE];
-__IO uint32_t *topOfProcStack = NULL;
-__IO uint32_t *topOfMainStack = NULL;
+__IO uint8_t MemProcStack0[PROCESS_STACK0_SIZE];
+__IO uint8_t MemProcStack1[PROCESS_STACK1_SIZE];
+__IO uint32_t *topOfProcStack0;
+__IO uint32_t *topOfProcStack1;
 
 volatile uint32_t TimingMillis;
 
@@ -68,9 +69,10 @@ extern LINE_CODING linecoding;
 
 /* Private function prototypes -----------------------------------------------*/
 static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len);
-static void Process_Stack_Init(void);
-static void Spark_Wiring_Task(void);
-static void DIO_Toggle(DIO_TypeDef Dx);
+static __IO uint32_t *Process_Stack_Init(void (*processTask)(void), __IO uint8_t *procStackBuffer, uint32_t procStackSize);
+static void Spark_Process_Task(void);
+static void Wiring_Process_Task(void);
+//static void DIO_Toggle(DIO_TypeDef Dx);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -97,7 +99,11 @@ int main(void)
 
 	Set_System();
 
-	Process_Stack_Init();
+	topOfProcStack0 = Process_Stack_Init(Spark_Process_Task, MemProcStack0, PROCESS_STACK0_SIZE);
+	topOfProcStack1 = Process_Stack_Init(Wiring_Process_Task, MemProcStack1, PROCESS_STACK1_SIZE);
+
+	NVIC_SetPriority(PendSV_IRQn, SYSTICK_IRQ_PRIORITY);
+	NVIC_SetPriority(SVCall_IRQn, SYSTICK_IRQ_PRIORITY);
 
 	SysTick_Configuration();
 
@@ -133,66 +139,11 @@ int main(void)
 	Load_SystemFlags();
 #endif
 
-#ifdef SPARK_SFLASH_ENABLE
-	sFLASH_Init();
-#endif
+	__SVC();
 
-#ifdef SPARK_WLAN_ENABLE
-	SPARK_WLAN_Setup(Multicast_Presence_Announcement);
-#endif
-
-	/* Main loop */
-	while (1)
+	/* Execution should not reach here */
+	while(1)
 	{
-		DIO_Toggle(D0);//For Context-Switch Testing only
-
-#ifdef SPARK_WLAN_ENABLE
-
-		SPARK_WLAN_Loop();
-
-		if (SPARK_SOCKET_CONNECTED)
-		{
-			if (!SPARK_HANDSHAKE_COMPLETED)
-			{
-				int err = Spark_Handshake();
-				if (err)
-				{
-					if (0 > err)
-					{
-						// Wrong key error, red
-						LED_SetRGBColor(0xff0000);
-					}
-					else if (1 == err)
-					{
-						// RSA decryption error, orange
-						LED_SetRGBColor(0xff6000);
-					}
-					else if (2 == err)
-					{
-						// RSA signature verification error, magenta
-						LED_SetRGBColor(0xff00ff);
-					}
-					LED_On(LED_RGB);
-				}
-				else
-				{
-					SPARK_HANDSHAKE_COMPLETED = 1;
-				}
-			}
-
-			if (!Spark_Communication_Loop())
-			{
-				if (LED_RGB_OVERRIDE)
-				{
-					LED_Signaling_Stop();
-				}
-				SPARK_FLASH_UPDATE = 0;
-				SPARK_LED_FADE = 0;
-				SPARK_HANDSHAKE_COMPLETED = 0;
-				SPARK_SOCKET_CONNECTED = 0;
-			}
-		}
-#endif
 	}
 }
 
@@ -317,38 +268,96 @@ void Timing_Decrement(void)
 	NVIC_INT_CTRL = NVIC_PENDSVSET;	//Trigger PendSV
 }
 
-static void Process_Stack_Init(void)
+static __IO uint32_t *Process_Stack_Init(void (*processTask)(void), __IO uint8_t *procStackBuffer, uint32_t procStackSize)
 {
-	uint32_t Index;
-
 	/* Initialize memory reserved for Process Stack */
-	for(Index = 0; Index < SP_PROCESS_SIZE; Index++)
+	for(uint32_t index = 0; index < procStackSize; index++)
 	{
-		PSPMemAlloc[Index] = 0x00;
+		procStackBuffer[index] = 0x00;
 	}
 
 	/* Set Process stack value */
-	topOfProcStack = (uint32_t *)((uint32_t)PSPMemAlloc + SP_PROCESS_SIZE);
+	uint32_t *topOfProcStack = (uint32_t *)((uint32_t)procStackBuffer + procStackSize);
 
-	topOfProcStack--; /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts. */
-	*topOfProcStack = 0x01000000UL;	/* xPSR */
 	topOfProcStack--;
-	*topOfProcStack = (uint32_t)Spark_Wiring_Task;	/* PC */
+	*topOfProcStack = 0x01000000UL;				/* xPSR */
 	topOfProcStack--;
-	*topOfProcStack = 0;	/* LR */
-	topOfProcStack -= 5;	/* R12, R3, R2 and R1. */
-	*topOfProcStack = 0;	/* R0 */
-	topOfProcStack -= 8;	/* R11, R10, R9, R8, R7, R6, R5 and R4. */
+	*topOfProcStack = (uint32_t)processTask;	/* PC */
+	topOfProcStack--;
+	*topOfProcStack = 0;						/* LR */
+	topOfProcStack -= 5;						/* R12, R3, R2 and R1. */
+	*topOfProcStack = NULL;						/* R0 */
+	topOfProcStack -= 8;						/* R11, R10, R9, R8, R7, R6, R5 and R4. */
 
-	//__set_PSP((uint32_t)topOfProcStack);
-
-	NVIC_SetPriority(PendSV_IRQn, SYSTICK_IRQ_PRIORITY);
-	NVIC_SetPriority(SVCall_IRQn, SYSTICK_IRQ_PRIORITY);
-
-	//__SVC();
+	return topOfProcStack;
 }
 
-static void Spark_Wiring_Task(void)
+static void Spark_Process_Task(void)
+{
+#ifdef SPARK_SFLASH_ENABLE
+	sFLASH_Init();
+#endif
+
+#ifdef SPARK_WLAN_ENABLE
+	SPARK_WLAN_Setup(Multicast_Presence_Announcement);
+#endif
+
+	/* Main loop */
+	while (1)
+	{
+		//DIO_Toggle(D0);//For Context-Switch Testing only
+
+#ifdef SPARK_WLAN_ENABLE
+
+		SPARK_WLAN_Loop();
+
+		if (SPARK_SOCKET_CONNECTED)
+		{
+			if (!SPARK_HANDSHAKE_COMPLETED)
+			{
+				int err = Spark_Handshake();
+				if (err)
+				{
+					if (0 > err)
+					{
+						// Wrong key error, red
+						LED_SetRGBColor(0xff0000);
+					}
+					else if (1 == err)
+					{
+						// RSA decryption error, orange
+						LED_SetRGBColor(0xff6000);
+					}
+					else if (2 == err)
+					{
+						// RSA signature verification error, magenta
+						LED_SetRGBColor(0xff00ff);
+					}
+					LED_On(LED_RGB);
+				}
+				else
+				{
+					SPARK_HANDSHAKE_COMPLETED = 1;
+				}
+			}
+
+			if (!Spark_Communication_Loop())
+			{
+				if (LED_RGB_OVERRIDE)
+				{
+					LED_Signaling_Stop();
+				}
+				SPARK_FLASH_UPDATE = 0;
+				SPARK_LED_FADE = 0;
+				SPARK_HANDSHAKE_COMPLETED = 0;
+				SPARK_SOCKET_CONNECTED = 0;
+			}
+		}
+#endif
+	}
+}
+
+static void Wiring_Process_Task(void)
 {
 #ifdef SPARK_WIRING_ENABLE
 	if(NULL != setup)
@@ -359,7 +368,7 @@ static void Spark_Wiring_Task(void)
 
 	while(1)
 	{
-		DIO_Toggle(D1);//For Context-Switch Testing only
+		//DIO_Toggle(D1);//For Context-Switch Testing only
 
 #ifdef SPARK_WIRING_ENABLE
 		if(!SPARK_FLASH_UPDATE && !IWDG_SYSTEM_RESET)
@@ -376,13 +385,13 @@ static void Spark_Wiring_Task(void)
 	}
 }
 
-//For Context-Switch Testing only
-void DIO_Toggle(DIO_TypeDef Dx){
-	DIO_SetState(Dx, HIGH);
-	delay(100);
-	DIO_SetState(Dx, LOW);
-	delay(100);
-}
+/* For Context-Switch Testing only */
+//void DIO_Toggle(DIO_TypeDef Dx){
+//	DIO_SetState(Dx, HIGH);
+//	delay(50);
+//	DIO_SetState(Dx, LOW);
+//	delay(50);
+//}
 
 /*******************************************************************************
  * Function Name  : USB_USART_Init

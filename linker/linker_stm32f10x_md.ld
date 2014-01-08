@@ -23,7 +23,7 @@
 These are used by the startup in order to allocate stacks for the different modes.
 */
 
-__Stack_Size = 2048 ;
+__Stack_Size = 512 ;
 
 PROVIDE ( _Stack_Size = __Stack_Size ) ;
 
@@ -35,7 +35,7 @@ PROVIDE ( _Stack_Init = __Stack_Init ) ;
 /*
 There will be a link error if there is not this amount of RAM free at the end.
 */
-_Minimum_Stack_Size = 0x200 ;
+_Minimum_Stack_Size = 0x100 ;
 
 /* include the memory spaces definitions sub-script */
 /*

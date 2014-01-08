@@ -346,7 +346,7 @@ int Spark_Handshake(void)
   Spark_Protocol_Init();
   spark_protocol.reset_updating();
   int err = spark_protocol.handshake();
-  Multicast_Presence_Announcement();
+  //Multicast_Presence_Announcement();
   return err;
 }
 
