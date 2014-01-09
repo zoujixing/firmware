@@ -38,6 +38,7 @@
 /* Private macro -------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
+__IO int32_t activeProcStack = PROCESS_STACK_NOT_ACTIVE;	//-1, 0 or 1
 
 /* Extern variables ----------------------------------------------------------*/
 extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
@@ -206,6 +207,12 @@ void PendSV_Handler(void)
  *******************************************************************************/
 void SysTick_Handler(void)
 {
+	//Wait for SVC_Handler to run first
+	if(activeProcStack != PROCESS_STACK_NOT_ACTIVE)
+	{
+		NVIC_INT_CTRL = NVIC_PENDSVSET;	//Trigger PendSV
+	}
+
 	Timing_Decrement();
 }
 

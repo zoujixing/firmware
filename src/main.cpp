@@ -46,7 +46,6 @@ __IO uint8_t MemProcStack0[PROCESS_STACK0_SIZE];
 __IO uint8_t MemProcStack1[PROCESS_STACK1_SIZE];
 __IO uint32_t *topOfProcStack0;
 __IO uint32_t *topOfProcStack1;
-__IO int32_t activeProcStack = PROCESS_STACK_NOT_ACTIVE;	//-1, 0 or 1
 
 volatile uint32_t TimingMillis;
 
@@ -102,8 +101,8 @@ int main(void)
 	topOfProcStack0 = Process_Stack_Init(Spark_Process_Task, MemProcStack0, PROCESS_STACK0_SIZE);
 	topOfProcStack1 = Process_Stack_Init(Wiring_Process_Task, MemProcStack1, PROCESS_STACK1_SIZE);
 
-	NVIC_SetPriority(PendSV_IRQn, SYSTICK_IRQ_PRIORITY);
-	NVIC_SetPriority(SVCall_IRQn, SYSTICK_IRQ_PRIORITY);
+	NVIC_SetPriority(SVCall_IRQn, SVCALL_IRQ_PRIORITY);
+	NVIC_SetPriority(PendSV_IRQn, PENDSV_IRQ_PRIORITY);
 
 	SysTick_Configuration();
 
@@ -264,12 +263,6 @@ void Timing_Decrement(void)
 		TimingIWDGReload++;
 	}
 #endif
-
-	//Wait for SVC_Handler to run first
-	if(activeProcStack != PROCESS_STACK_NOT_ACTIVE)
-	{
-		NVIC_INT_CTRL = NVIC_PENDSVSET;	//Trigger PendSV
-	}
 }
 
 static __IO uint32_t *Process_Stack_Init(void (*processTask)(void), __IO uint8_t *procStackBuffer, uint32_t procStackSize)
