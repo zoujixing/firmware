@@ -393,7 +393,7 @@ int Spark_Handshake(void)
   Spark_Protocol_Init();
   spark_protocol.reset_updating();
   int err = spark_protocol.handshake();
-  //Multicast_Presence_Announcement();
+  Multicast_Presence_Announcement();
   return err;
 }
 
@@ -445,7 +445,7 @@ void LED_Signaling_Override(void)
     LED_SetSignalingColor(VIBGYOR_Colors[VIBGYOR_Index]);
     LED_On(LED_RGB);
 
-    LED_Signaling_Timing = 100;	// 100 ms
+    LED_Signaling_Timing = 1000;//100;	// 100 ms
 
     ++VIBGYOR_Index;
     if(VIBGYOR_Index >= VIBGYOR_Size)

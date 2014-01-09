@@ -100,10 +100,18 @@ int main(void)
 	topOfProcStack0 = Process_Stack_Init(Spark_Process_Task, MemProcStack0, PROCESS_STACK0_SIZE);
 	topOfProcStack1 = Process_Stack_Init(Wiring_Process_Task, MemProcStack1, PROCESS_STACK1_SIZE);
 
+	/* Setup SysTick Timer for 100 usec interrupts */
+	if (SysTick_Config(SystemCoreClock / 10000))
+	{
+		/* Capture error */
+		while (1)
+		{
+		}
+	}
+
+	NVIC_SetPriority(SysTick_IRQn, SYSTICK_IRQ_PRIORITY);
 	NVIC_SetPriority(SVCall_IRQn, SVCALL_IRQ_PRIORITY);
 	NVIC_SetPriority(PendSV_IRQn, PENDSV_IRQ_PRIORITY);
-
-	SysTick_Configuration();
 
 	/* Enable CRC clock */
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_CRC, ENABLE);
@@ -194,9 +202,9 @@ void Timing_Decrement(void)
 #if defined (USE_SPARK_CORE_V02)
 		LED_Fade(LED_RGB);
 		if(SPARK_HANDSHAKE_COMPLETED)
-			TimingLED = 20;
+			TimingLED = 200;//20;
 		else
-			TimingLED = 1;
+			TimingLED = 10;//1;
 #endif
 	}
 	else if(SPARK_HANDSHAKE_COMPLETED)
@@ -221,9 +229,9 @@ void Timing_Decrement(void)
 		LED_Toggle(LED_RGB);
 #endif
 		if(SPARK_SOCKET_CONNECTED)
-			TimingLED = 50;		//50ms
+			TimingLED = 500;//50;	//50ms
 		else
-			TimingLED = 100;	//100ms
+			TimingLED = 1000;//100;	//100ms
 	}
 
 #ifdef SPARK_WLAN_ENABLE
@@ -319,7 +327,6 @@ static void Spark_Process_Task(void)
 	while (1)
 	{
 #ifdef SPARK_WLAN_ENABLE
-
 		SPARK_WLAN_Loop();
 
 		if (SPARK_SOCKET_CONNECTED)
