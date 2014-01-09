@@ -103,7 +103,7 @@ void WiFiCredentialsReader::print(const char *s)
   for (size_t i = 0; i < strlen(s); ++i)
   {
     serial.write(s[i]);
-    delay(1); // ridonkulous, but required
+    Delay(1); // ridonkulous, but required
   }
 }
 

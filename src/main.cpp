@@ -71,7 +71,6 @@ static void IntToUnicode (uint32_t value , uint8_t *pbuf , uint8_t len);
 static __IO uint32_t *Process_Stack_Init(void (*processTask)(void), __IO uint8_t *procStackBuffer, uint32_t procStackSize);
 static void Spark_Process_Task(void);
 static void Wiring_Process_Task(void);
-//static void DIO_Toggle(DIO_TypeDef Dx);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -319,8 +318,6 @@ static void Spark_Process_Task(void)
 	/* Main loop */
 	while (1)
 	{
-		//DIO_Toggle(D0);//For Context-Switch Testing only
-
 #ifdef SPARK_WLAN_ENABLE
 
 		SPARK_WLAN_Loop();
@@ -374,7 +371,7 @@ static void Spark_Process_Task(void)
 static void Wiring_Process_Task(void)
 {
 #ifdef SPARK_WIRING_ENABLE
-	if(NULL != setup)
+	if((IWDG_SYSTEM_RESET != 1) && (NULL != setup))
 	{
 		setup();
 	}
@@ -382,8 +379,6 @@ static void Wiring_Process_Task(void)
 
 	while(1)
 	{
-		//DIO_Toggle(D1);//For Context-Switch Testing only
-
 #ifdef SPARK_WIRING_ENABLE
 		if(!SPARK_FLASH_UPDATE && !IWDG_SYSTEM_RESET)
 		{
@@ -393,19 +388,14 @@ static void Wiring_Process_Task(void)
 				loop();
 			}
 
-			userEventSend();
+			if(SPARK_HANDSHAKE_COMPLETED)
+			{
+				userEventSend();
+			}
 		}
 #endif
 	}
 }
-
-/* For Context-Switch Testing only */
-//void DIO_Toggle(DIO_TypeDef Dx){
-//	DIO_SetState(Dx, HIGH);
-//	delay(50);
-//	DIO_SetState(Dx, LOW);
-//	delay(50);
-//}
 
 /*******************************************************************************
  * Function Name  : USB_USART_Init
