@@ -38,7 +38,6 @@ extern "C" {
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
-//#undef SPARK_WLAN_ENABLE	//comment this line to enable WLAN (currently UNSTABLE)
 
 /* Private macro -------------------------------------------------------------*/
 
@@ -47,6 +46,7 @@ __IO uint8_t MemProcStack0[PROCESS_STACK0_SIZE];
 __IO uint8_t MemProcStack1[PROCESS_STACK1_SIZE];
 __IO uint32_t *topOfProcStack0;
 __IO uint32_t *topOfProcStack1;
+__IO int32_t activeProcStack = PROCESS_STACK_NOT_ACTIVE;	//-1, 0 or 1
 
 volatile uint32_t TimingMillis;
 
@@ -265,7 +265,11 @@ void Timing_Decrement(void)
 	}
 #endif
 
-	NVIC_INT_CTRL = NVIC_PENDSVSET;	//Trigger PendSV
+	//Wait for SVC_Handler to run first
+	if(activeProcStack != PROCESS_STACK_NOT_ACTIVE)
+	{
+		NVIC_INT_CTRL = NVIC_PENDSVSET;	//Trigger PendSV
+	}
 }
 
 static __IO uint32_t *Process_Stack_Init(void (*processTask)(void), __IO uint8_t *procStackBuffer, uint32_t procStackSize)
