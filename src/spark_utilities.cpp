@@ -46,6 +46,7 @@ uint32_t chunkIndex;
 extern unsigned int millis();
 
 // LED_Signaling_Override
+__IO uint8_t LED_Spark_Signal;
 __IO uint32_t LED_Signaling_Timing;
 const uint32_t VIBGYOR_Colors[] = {
   0xEE82EE, 0x4B0082, 0x0000FF, 0x00FF00, 0xFFFF00, 0xFFA500, 0xFF0000};
@@ -96,7 +97,39 @@ static int str_len(char str[]);
 static void sub_str(char dest[], char src[], int offset, int len);
 */
 
+RGBClass RGB;
 SparkClass Spark;
+
+bool RGBClass::_control = false;
+
+bool RGBClass::controlled(void)
+{
+	return _control;
+}
+
+void RGBClass::control(bool override)
+{
+#if !defined (RGB_NOTIFICATIONS_ON)
+	if (override)
+		LED_Signaling_Start();
+	else
+		LED_Signaling_Stop();
+
+	_control = override;
+#endif
+}
+
+void RGBClass::color(int red, int green, int blue)
+{
+#if !defined (RGB_NOTIFICATIONS_ON)
+	if (true != _control)
+		return;
+
+	TIM1->CCR2 = (uint16_t)(red   * (TIM1->ARR + 1) / 255);	// Red LED
+	TIM1->CCR3 = (uint16_t)(green * (TIM1->ARR + 1) / 255);	// Green LED
+	TIM1->CCR1 = (uint16_t)(blue  * (TIM1->ARR + 1) / 255);	// Blue LED
+#endif
+}
 
 void SparkClass::variable(const char *varKey, void *userVar, Spark_Data_TypeDef userVarType)
 {
@@ -282,6 +315,18 @@ void copyUserFunctionKey(char *destination, int function_index)
          USER_FUNC_KEY_LENGTH);
 }
 
+int numUserVariables(void)
+{
+  return User_Var_Count;
+}
+
+void copyUserVariableKey(char *destination, int variable_index)
+{
+  memcpy(destination,
+         User_Var_Lookup_Table[variable_index].userVarKey,
+         USER_VAR_KEY_LENGTH);
+}
+
 SparkReturnType::Enum wrapVarTypeInEnum(const char *varKey)
 {
   switch (userVarType(varKey))
@@ -322,6 +367,8 @@ void Spark_Protocol_Init(void)
     descriptor.num_functions = numUserFunctions;
     descriptor.copy_function_key = copyUserFunctionKey;
     descriptor.call_function = userFuncSchedule;
+    descriptor.num_variables = numUserVariables;
+    descriptor.copy_variable_key = copyUserVariableKey;
     descriptor.variable_type = wrapVarTypeInEnum;
     descriptor.get_variable = getUserVar;
     descriptor.was_ota_upgrade_successful = OTA_Flashed_GetStatus;
@@ -411,9 +458,15 @@ void LED_Signaling_Override(void)
 void Spark_Signal(bool on)
 {
   if (on)
+  {
     LED_Signaling_Start();
+    LED_Spark_Signal = 1;
+  }
   else
+  {
     LED_Signaling_Stop();
+    LED_Spark_Signal = 0;
+  }
 }
 
 int SparkClass::connect(void)
@@ -424,6 +477,36 @@ int SparkClass::connect(void)
 int SparkClass::disconnect(void)
 {
 	return Spark_Disconnect();
+}
+
+String SparkClass::deviceID(void)
+{
+	String deviceID;
+	char hex_digit;
+	char id[12];
+	memcpy(id, (char *)ID1, 12);
+	//OR
+	//uint8_t id[12];
+	//Get_Unique_Device_ID(id);
+
+	for (int i = 0; i < 12; ++i)
+	{
+		hex_digit = 48 + (id[i] >> 4);
+		if (57 < hex_digit)
+		{
+			hex_digit += 39;
+		}
+		deviceID.concat(hex_digit);
+
+		hex_digit = 48 + (id[i] & 0xf);
+		if (57 < hex_digit)
+		{
+			hex_digit += 39;
+		}
+		deviceID.concat(hex_digit);
+	}
+
+	return deviceID;
 }
 
 int Spark_Connect(void)
