@@ -47,6 +47,7 @@ __IO uint8_t MemProcStack1[PROCESS_STACK1_SIZE];
 __IO uint32_t *topOfProcStack0;
 __IO uint32_t *topOfProcStack1;
 
+volatile uint32_t SysTickIntCount;
 volatile uint32_t TimingMillis;
 
 uint8_t  USART_Rx_Buffer[USART_RX_DATA_SIZE];
@@ -166,11 +167,18 @@ int main(void)
  *******************************************************************************/
 void Timing_Decrement(void)
 {
-	TimingMillis++;
+	++SysTickIntCount;
 
-	if (TimingDelay != 0x00)
+	if(SysTickIntCount >= 10)
 	{
-		TimingDelay--;
+		TimingMillis++;
+
+		if (TimingDelay != 0x00)
+		{
+			TimingDelay--;
+		}
+
+		SysTickIntCount = 0;
 	}
 
 #if !defined (RGB_NOTIFICATIONS_ON)	&& defined (RGB_NOTIFICATIONS_OFF)
@@ -202,9 +210,9 @@ void Timing_Decrement(void)
 #if defined (USE_SPARK_CORE_V02)
 		LED_Fade(LED_RGB);
 		if(SPARK_HANDSHAKE_COMPLETED)
-			TimingLED = 200;//20;
+			TimingLED = 200;	//20ms
 		else
-			TimingLED = 10;//1;
+			TimingLED = 10;		//1ms;
 #endif
 	}
 	else if(SPARK_HANDSHAKE_COMPLETED)
@@ -229,9 +237,9 @@ void Timing_Decrement(void)
 		LED_Toggle(LED_RGB);
 #endif
 		if(SPARK_SOCKET_CONNECTED)
-			TimingLED = 500;//50;	//50ms
+			TimingLED = 500;	//50ms
 		else
-			TimingLED = 1000;//100;	//100ms
+			TimingLED = 1000;	//100ms
 	}
 
 #ifdef SPARK_WLAN_ENABLE

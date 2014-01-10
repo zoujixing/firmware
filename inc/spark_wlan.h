@@ -46,7 +46,7 @@ extern "C" {
 #define WLAN_TIMEOUT_FILE_OFFSET	2
 #define ERROR_COUNT_FILE_OFFSET		3
 
-#define TIMING_SPARK_COMM_TIMEOUT	30000	//30sec
+#define TIMING_SPARK_COMM_TIMEOUT	300000	//30sec
 
 void Set_NetApp_Timeout(void);
 void Clear_NetApp_Dhcp(void);

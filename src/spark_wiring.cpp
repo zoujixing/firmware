@@ -508,7 +508,8 @@ unsigned long micros(void)
  */
 void delay(unsigned long ms)
 {
-	Delay_Microsecond(ms * 1000);
+	unsigned long _millis = millis() + ms;
+	while (_millis > millis());
 }
 
 /*
