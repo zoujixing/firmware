@@ -405,6 +405,9 @@ static void Wiring_Process_Task(void)
 
 			if(SPARK_HANDSHAKE_COMPLETED)
 			{
+				//Execute scheduled user function
+				userFuncExecute();
+				//Send scheduled user event
 				userEventSend();
 			}
 		}

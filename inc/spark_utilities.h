@@ -99,10 +99,7 @@ bool Spark_Communication_Loop(void);
 void Multicast_Presence_Announcement(void);
 void Spark_Signal(bool on);
 
-int userVarType(const char *varKey);
-void *getUserVar(const char *varKey);
-int userFuncSchedule(const char *funcKey, const char *paramString);
-
+void userFuncExecute(void);
 void userEventSend(void);
 
 long socket_connect(long sd, const sockaddr *addr, long addrlen);

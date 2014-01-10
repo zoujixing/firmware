@@ -69,8 +69,9 @@ struct User_Func_Lookup_Table_t
 	int (*pUserFunc)(String userArg);
 	char userFuncKey[USER_FUNC_KEY_LENGTH];
 	char userFuncArg[USER_FUNC_ARG_LENGTH];
-	int userFuncRet;
 	bool userFuncSchedule;
+	bool userFuncRetAvailable;
+	int userFuncRetValue;
 } User_Func_Lookup_Table[USER_FUNC_MAX_COUNT];
 
 struct User_Event_Lookup_Table_t
@@ -176,6 +177,8 @@ void SparkClass::function(const char *funcKey, int (*pFunc)(String paramString))
 		memset(User_Func_Lookup_Table[User_Func_Count].userFuncKey, 0, USER_FUNC_KEY_LENGTH);
 		memcpy(User_Func_Lookup_Table[User_Func_Count].userFuncKey, funcKey, USER_FUNC_KEY_LENGTH);
 		User_Func_Lookup_Table[User_Func_Count].userFuncSchedule = false;
+		User_Func_Lookup_Table[User_Func_Count].userFuncRetAvailable = false;
+		User_Func_Lookup_Table[User_Func_Count].userFuncRetValue = -1;
 		User_Func_Count++;
 	}
 }
@@ -327,6 +330,30 @@ void copyUserVariableKey(char *destination, int variable_index)
          USER_VAR_KEY_LENGTH);
 }
 
+int userVarType(const char *varKey)
+{
+	for (int i = 0; i < User_Var_Count; ++i)
+	{
+		if (0 == strncmp(User_Var_Lookup_Table[i].userVarKey, varKey, USER_VAR_KEY_LENGTH))
+		{
+			return User_Var_Lookup_Table[i].userVarType;
+		}
+	}
+	return -1;
+}
+
+void *getUserVar(const char *varKey)
+{
+	for (int i = 0; i < User_Var_Count; ++i)
+	{
+		if (0 == strncmp(User_Var_Lookup_Table[i].userVarKey, varKey, USER_VAR_KEY_LENGTH))
+		{
+			return User_Var_Lookup_Table[i].userVar;
+		}
+	}
+	return NULL;
+}
+
 SparkReturnType::Enum wrapVarTypeInEnum(const char *varKey)
 {
   switch (userVarType(varKey))
@@ -349,6 +376,72 @@ SparkReturnType::Enum wrapVarTypeInEnum(const char *varKey)
   }
 }
 
+void userFuncSchedule(const char *funcKey, const char *paramString)
+{
+	for(int i = 0; i < User_Func_Count; i++)
+	{
+		if(NULL != paramString && (0 == strncmp(User_Func_Lookup_Table[i].userFuncKey, funcKey, USER_FUNC_KEY_LENGTH)))
+		{
+			size_t paramLength = strlen(paramString);
+			if(paramLength > USER_FUNC_ARG_LENGTH)
+				paramLength = USER_FUNC_ARG_LENGTH;
+			memcpy(User_Func_Lookup_Table[i].userFuncArg, paramString, paramLength);
+			User_Func_Lookup_Table[i].userFuncSchedule = true;
+			return;
+		}
+	}
+}
+
+bool userFuncRetAvailable(void)
+{
+	for(int i = 0; i < User_Func_Count; i++)
+	{
+		return User_Func_Lookup_Table[i].userFuncRetAvailable;
+	}
+	return false;
+}
+
+int userFuncRetValue(void)
+{
+	for(int i = 0; i < User_Func_Count; i++)
+	{
+		return User_Func_Lookup_Table[i].userFuncRetValue;
+	}
+	return -1;
+}
+
+void userFuncExecute(void)
+{
+	for(int i = 0; i < User_Func_Count; i++)
+	{
+		if(true == User_Func_Lookup_Table[i].userFuncSchedule)
+		{
+			String pString(User_Func_Lookup_Table[i].userFuncArg);
+			User_Func_Lookup_Table[i].userFuncRetValue = User_Func_Lookup_Table[i].pUserFunc(pString);
+			User_Func_Lookup_Table[i].userFuncRetAvailable = true;
+			User_Func_Lookup_Table[i].userFuncSchedule = false;
+			return;
+		}
+	}
+}
+
+void userEventSend(void)
+{
+	for(int i = 0; i < User_Event_Count; i++)
+	{
+		if(true == User_Event_Lookup_Table[i].userEventSchedule)
+		{
+			User_Event_Lookup_Table[i].userEventSchedule = false;
+/*
+			//Send the "Event" back to the server here OR in a separate thread
+			unsigned char buf[256];
+			memset(buf, 0, 256);
+			spark_protocol.event(buf, User_Event_Lookup_Table[i].userEventName, strlen(User_Event_Lookup_Table[i].userEventName), User_Event_Lookup_Table[i].userEventResult, strlen(User_Event_Lookup_Table[i].userEventResult));
+*/
+		}
+	}
+}
+
 void Spark_Protocol_Init(void)
 {
   if (!spark_protocol.is_initialized())
@@ -366,7 +459,9 @@ void Spark_Protocol_Init(void)
     SparkDescriptor descriptor;
     descriptor.num_functions = numUserFunctions;
     descriptor.copy_function_key = copyUserFunctionKey;
-    descriptor.call_function = userFuncSchedule;
+    descriptor.request_execution = userFuncSchedule;
+    descriptor.is_return_value_available = userFuncRetAvailable;
+    descriptor.get_function_return_value = userFuncRetValue;
     descriptor.num_variables = numUserVariables;
     descriptor.copy_variable_key = copyUserVariableKey;
     descriptor.variable_type = wrapVarTypeInEnum;
@@ -553,68 +648,6 @@ void Spark_ConnectAbort_WLANReset(void)
 	tSLInformation.usRxDataPending = 0;
 
 	SPARK_WLAN_RESET = 1;
-}
-
-int userVarType(const char *varKey)
-{
-	for (int i = 0; i < User_Var_Count; ++i)
-	{
-		if (0 == strncmp(User_Var_Lookup_Table[i].userVarKey, varKey, USER_VAR_KEY_LENGTH))
-		{
-			return User_Var_Lookup_Table[i].userVarType;
-		}
-	}
-	return -1;
-}
-
-void *getUserVar(const char *varKey)
-{
-	for (int i = 0; i < User_Var_Count; ++i)
-	{
-		if (0 == strncmp(User_Var_Lookup_Table[i].userVarKey, varKey, USER_VAR_KEY_LENGTH))
-		{
-			return User_Var_Lookup_Table[i].userVar;
-		}
-	}
-	return NULL;
-}
-
-int userFuncSchedule(const char *funcKey, const char *paramString)
-{
-	String pString(paramString);
-	int i = 0;
-	for(i = 0; i < User_Func_Count; i++)
-	{
-		if(NULL != paramString && (0 == strncmp(User_Func_Lookup_Table[i].userFuncKey, funcKey, USER_FUNC_KEY_LENGTH)))
-		{
-			size_t paramLength = strlen(paramString);
-			if(paramLength > USER_FUNC_ARG_LENGTH)
-				paramLength = USER_FUNC_ARG_LENGTH;
-			memcpy(User_Func_Lookup_Table[i].userFuncArg, paramString, paramLength);
-			User_Func_Lookup_Table[i].userFuncSchedule = true;
-			//return User_Func_Lookup_Table[i].pUserFunc(User_Func_Lookup_Table[i].userFuncArg);
-			return User_Func_Lookup_Table[i].pUserFunc(pString);
-		}
-	}
-	return -1;
-}
-
-void userEventSend(void)
-{
-	int i = 0;
-	for(i = 0; i < User_Event_Count; i++)
-	{
-		if(true == User_Event_Lookup_Table[i].userEventSchedule)
-		{
-			User_Event_Lookup_Table[i].userEventSchedule = false;
-/*
-			//Send the "Event" back to the server here OR in a separate thread
-			unsigned char buf[256];
-			memset(buf, 0, 256);
-			spark_protocol.event(buf, User_Event_Lookup_Table[i].userEventName, strlen(User_Event_Lookup_Table[i].userEventName), User_Event_Lookup_Table[i].userEventResult, strlen(User_Event_Lookup_Table[i].userEventResult));
-*/
-		}
-	}
 }
 
 long socket_connect(long sd, const sockaddr *addr, long addrlen)
