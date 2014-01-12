@@ -249,6 +249,8 @@ void Start_Smart_Config(void)
 	LED_On(LED_RGB);
 #endif
 
+	Set_NetApp_Timeout();
+
 	WLAN_SMART_CONFIG_START = 0;
 }
 
@@ -385,17 +387,6 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 		Save_SystemFlags();
 	}
 
-	/*
-	 * Commenting the below condition for now since running the patch-programmmer
-	 * over core-firmware resets the netapp_timeout_values to its default values.
-	 */
-	//if(NVMEM_Spark_File_Data[WLAN_TIMEOUT_FILE_OFFSET] == 0)
-	{
-		Set_NetApp_Timeout();
-		NVMEM_Spark_File_Data[WLAN_TIMEOUT_FILE_OFFSET] = 1;
-		nvmem_write(NVMEM_SPARK_FILE_ID, 1, WLAN_TIMEOUT_FILE_OFFSET, &NVMEM_Spark_File_Data[WLAN_TIMEOUT_FILE_OFFSET]);
-	}
-
 	if(!WLAN_MANUAL_CONNECT)
 	{
 		if(NVMEM_Spark_File_Data[WLAN_PROFILE_FILE_OFFSET] == 0)
@@ -426,6 +417,8 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 	}
 
 	Clear_NetApp_Dhcp();
+
+	Set_NetApp_Timeout();
 }
 
 void SPARK_WLAN_Loop(void)
@@ -601,15 +594,8 @@ int Internet_Test(void)
 
 	testResult = connect(testSocket, &testSocketAddr, sizeof(testSocketAddr));
 
-	if (testResult < 0)
-	{
-		// Unable to connect
-		return -1;
-	}
-	else
-	{
-		closesocket(testSocket);
-	}
+	closesocket(testSocket);
 
+	//if connection fails, testResult returns -1
     return testResult;
 }
