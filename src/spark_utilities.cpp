@@ -387,7 +387,7 @@ void userFuncSchedule(const char *funcKey, const char *paramString)
 				paramLength = USER_FUNC_ARG_LENGTH;
 			memcpy(User_Func_Lookup_Table[i].userFuncArg, paramString, paramLength);
 			User_Func_Lookup_Table[i].userFuncSchedule = true;
-			return;
+			return;//return immediately for other user code execution
 		}
 	}
 }
@@ -396,7 +396,10 @@ bool userFuncRetAvailable(void)
 {
 	for(int i = 0; i < User_Func_Count; i++)
 	{
-		return User_Func_Lookup_Table[i].userFuncRetAvailable;
+		if(true == User_Func_Lookup_Table[i].userFuncRetAvailable)
+		{
+			return true;
+		}
 	}
 	return false;
 }
@@ -405,7 +408,10 @@ int userFuncRetValue(void)
 {
 	for(int i = 0; i < User_Func_Count; i++)
 	{
-		return User_Func_Lookup_Table[i].userFuncRetValue;
+		if(true == User_Func_Lookup_Table[i].userFuncRetAvailable)
+		{
+			return User_Func_Lookup_Table[i].userFuncRetValue;
+		}
 	}
 	return -1;
 }
@@ -420,7 +426,7 @@ void userFuncExecute(void)
 			User_Func_Lookup_Table[i].userFuncRetValue = User_Func_Lookup_Table[i].pUserFunc(pString);
 			User_Func_Lookup_Table[i].userFuncRetAvailable = true;
 			User_Func_Lookup_Table[i].userFuncSchedule = false;
-			return;
+			return;//return immediately for other user code execution
 		}
 	}
 }

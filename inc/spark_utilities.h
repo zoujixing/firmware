@@ -32,8 +32,6 @@
 
 #define BYTE_N(x,n)					(((x) >> n*8) & 0x000000FF)
 
-#define SPARK_BUF_LEN				600
-
 //#define SPARK_SERVER_IP				"54.235.79.249"
 #define SPARK_SERVER_PORT			5683
 
