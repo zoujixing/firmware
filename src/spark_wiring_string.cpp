@@ -140,38 +140,90 @@ char* itoa(int a, char* buffer, unsigned char radix){
 	return buffer;
 }
 
+bool isNumChar(char x)
+{
+    return (x >= '0' && x <= '9')? true: false;
+}
 
-// void itoa(int value, char *sp, int radix)
-// {
-//     char tmp[16];// be careful with the length of the buffer
-//     char *tp = tmp;
-//     int i;
-//     unsigned v;
-//     int sign;
+//convert string to long
+long atol(char *str)
+{
+	if (*str == NULL)
+		return 0;
 
-//     sign = (radix == 10 && value < 0);
-//     if (sign)   v = -value;
-//     else    v = (unsigned)value;
+	long result = 0;
+	int sign = 1;
+	int i = 0;
 
-//     while (v || tp == tmp)
-//     {
-//         i = v % radix;
-//         v /= radix; // v/=radix uses less CPU clocks than v=v/radix does
-//         if (i < 10)
-//           *tp++ = i+'0';
-//         else
-//           *tp++ = i + 'a' - 10;
-//     }
+	if (str[0] == '-')
+	{
+		sign = -1;
+		i++;
+	}
 
-//     if (sign)
-//     *sp++ = '-';
-//     while (tp > tmp)
-//     *sp++ = *--tp;
-// }
+	for (; str[i] != '\0'; ++i)
+	{
+		if (isNumChar(str[i]) == false)
+			return 0;
 
-//------------------------------------------------------------------------------------------
+		result = result*10 + str[i] - '0';
+	}
 
+	return sign*result;
+}
 
+//convert string to double
+double atof(char *str)
+{
+	if (!str || !*str)
+		return 0;
+
+	double intPart = 0;
+	double fractPart = 0;
+	int divFract = 1;
+	int sign = 1;
+	bool isFract = false;
+
+	if (*str == '-')
+	{
+		++str;
+		sign = -1;
+	}
+	else if (*str == '+')
+	{
+		++str;
+	}
+
+	while (*str != '\0')
+	{
+		if (*str >= '0' && *str <= '9')
+		{
+			if (isFract)
+			{
+				fractPart = fractPart*10 + (*str - '0');
+				divFract *= 10;
+			}
+			else
+			{
+				intPart = intPart*10 + (*str - '0');
+			}
+		}
+		else if (*str == '.')
+		{
+			if (isFract)
+				return sign * (intPart + fractPart/divFract);
+			else
+				isFract = true;
+		}
+		else
+		{
+			return sign * (intPart + fractPart/divFract);
+		}
+		++str;
+	}
+
+	return sign * (intPart + fractPart/divFract);
+}
 
 /*********************************************/
 /*  Constructors                             */
@@ -852,6 +904,6 @@ long String::toInt(void) const
 
 float String::toFloat(void) const
 {
-	if (buffer) return float(atof(buffer));
+	if (buffer) return atof(buffer);
 	return 0;
 }
