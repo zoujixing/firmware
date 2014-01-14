@@ -38,11 +38,11 @@ void setup()
 	//Setup the Tinker application here
 
 	//Register all the Tinker functions
-//	Spark.function("digitalread", tinkerDigitalRead);
+	Spark.function("digitalread", tinkerDigitalRead);
 	Spark.function("digitalwrite", tinkerDigitalWrite);
-//
-//	Spark.function("analogread", tinkerAnalogRead);
-//	Spark.function("analogwrite", tinkerAnalogWrite);
+
+	Spark.function("analogread", tinkerAnalogRead);
+	Spark.function("analogwrite", tinkerAnalogWrite);
 
 }
 
