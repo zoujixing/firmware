@@ -113,7 +113,7 @@ extern void delay(unsigned long ms);
 #define NVIC_PENDSVCLR				(1UL << 27UL)	//0x08000000
 
 #define PROCESS_STACK0_SIZE			0x800	/* Process stack0 size */
-#define PROCESS_STACK1_SIZE			0x500	/* Process stack1 size */
+#define PROCESS_STACK1_SIZE			0x400	/* Process stack1 size */
 
 #define PROCESS_STACK_NOT_ACTIVE	-1		/* Process stack not active */
 #define PROCESS_STACK0_ACTIVE		0		/* Process stack0 active */
