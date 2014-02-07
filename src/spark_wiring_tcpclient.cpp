@@ -33,6 +33,9 @@ TCPClient::TCPClient() : _sock(MAX_SOCK_NUM)
 
 TCPClient::TCPClient(uint8_t sock) : _sock(sock) 
 {
+	_offset = 0;
+	_remaining = 0;
+	_buffered = 0;
 }
 
 int TCPClient::connect(const char* host, uint16_t port) 
@@ -67,6 +70,7 @@ int TCPClient::connect(IPAddress ip, uint16_t port)
 
 	_offset = 0;
 	_remaining = 0;
+	_buffered = 0;
 
 	tSocketAddr.sa_family = AF_INET;
 
@@ -81,7 +85,7 @@ int TCPClient::connect(IPAddress ip, uint16_t port)
 	if(socket_connect(_sock, &tSocketAddr, sizeof(tSocketAddr)) < 0)
 	{
 		_sock = MAX_SOCK_NUM;
-
+		wlan_sockets[_sock] = false;
 		return 0;
 	}
 
@@ -212,34 +216,35 @@ void TCPClient::flush()
 
 void TCPClient::stop() 
 {
-	if (closesocket(_sock) == 0)
+	if((WLAN_DHCP != 1) || (_sock == MAX_SOCK_NUM))
 	{
-		_sock = MAX_SOCK_NUM;
+		return;
 	}
+
+	//Delay 100ms to prevent CC3000 freeze
+	delay(100);
+
+	closesocket(_sock);
+
+	_sock = MAX_SOCK_NUM;
 }
 
-uint8_t TCPClient::connected() 
+bool TCPClient::connected()
 {
-	if (_sock == MAX_SOCK_NUM)
+	if((WLAN_DHCP != 1) || (_sock == MAX_SOCK_NUM))
 	{
-		return 0;
+		return false;
 	}
 
-	//To Do
-
-	return 1;
-}
-
-uint8_t TCPClient::status() 
-{
-	if (_sock == MAX_SOCK_NUM)
+	//wlan_sockets[] set using HCI_EVNT_BSD_TCP_CLOSE_WAIT Async event in spark_wlan.cpp
+	if ((!available()) && (wlan_sockets[_sock] == true))
 	{
-		return 0;
+		stop();
+		wlan_sockets[_sock] = false;
+		return false;
 	}
 
-	//To Do
-
-	return 1;
+	return true;
 }
 
 TCPClient::operator bool()
