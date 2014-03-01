@@ -33,7 +33,7 @@ TCPServer::TCPServer(uint16_t port) : _port(port), _sock(MAX_SOCK_NUM), _client(
 
 void TCPServer::begin()
 {
-	if(WLAN_DHCP != 1)
+	if(!SPARK_WLAN_hasAddress())
 	{
 		return;
 	}
@@ -56,11 +56,11 @@ void TCPServer::begin()
 		return;
 	}
 
-	if (setsockopt(sock, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, SOCK_ON, sizeof(SOCK_ON)) < 0)
+	long optval = SOCK_ON;
+	if (setsockopt(sock, SOL_SOCKET, SOCKOPT_ACCEPT_NONBLOCK, &optval, sizeof(optval)) < 0)
 	{
 		return;
 	}
-
 
 	if (bind(sock, (sockaddr*)&tServerAddr, sizeof(tServerAddr)) < 0)
 	{
@@ -82,7 +82,7 @@ TCPClient TCPServer::available()
 		begin();
 	}
 
-	if((WLAN_DHCP != 1) || (_sock == MAX_SOCK_NUM))
+	if(!SPARK_WLAN_hasAddress() || (_sock == MAX_SOCK_NUM))
 	{
 		_sock = MAX_SOCK_NUM;
 		_client = TCPClient(MAX_SOCK_NUM);
