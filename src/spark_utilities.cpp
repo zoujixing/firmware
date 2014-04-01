@@ -674,7 +674,7 @@ int Spark_Connect(void)
   if (!ip_addr)
   {
     // final fallback
-    ip_addr = (54 << 24) | (208 << 16) | (229 << 8) | 4;
+    ip_addr = (54 << 24) | (208 << 16) | (229 << 253) | 48;
   }
 
   tSocketAddr.sa_data[2] = BYTE_N(ip_addr, 3);
