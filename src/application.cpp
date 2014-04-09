@@ -26,24 +26,104 @@
 /* Includes ------------------------------------------------------------------*/  
 #include "application.h"
 
-/* Function prototypes -------------------------------------------------------*/
-int tinkerDigitalRead(String pin);
-int tinkerDigitalWrite(String command);
-int tinkerAnalogRead(String pin);
-int tinkerAnalogWrite(String command);
+
+#undef SPARK_WLAN_ENABLE
+
+void IncrRegister(uint16_t addy);
+void ReadRegister(uint16_t addy);
+
 
 /* This function is called once at start up ----------------------------------*/
 void setup()
 {
-	//Setup the Tinker application here
+    Serial.begin(9600);
+    Serial.println("Hello!");
 
-	//Register all the Tinker functions
-	Spark.function("digitalread", tinkerDigitalRead);
-	Spark.function("digitalwrite", tinkerDigitalWrite);
+    Delay(2500);
 
-	Spark.function("analogread", tinkerAnalogRead);
-	Spark.function("analogwrite", tinkerAnalogWrite);
+//WORKS
+    volatile uint16_t val = BKP_ReadBackupRegister(BKP_DR10);
+    BKP_WriteBackupRegister(BKP_DR10, val + 1);
+    Serial.println("Set Register "+String(BKP_DR10)+"to " + String(val + 1));
 
+
+
+    val = BKP_ReadBackupRegister(BKP_DR1);
+    if (val < 1000) {
+        val = 1000;
+    }
+    else if (val >= 50000) {
+        val = 1000;
+    }
+
+    BKP_WriteBackupRegister(BKP_DR1, val + 1);
+    Serial.println("Set Register "+String(BKP_DR1)+"to " + String(val + 1));
+
+
+
+//WORKS SORTA
+//ReadRegister(BKP_DR1);
+//IncrRegister(BKP_DR2);
+//IncrRegister(BKP_DR3);
+//IncrRegister(BKP_DR4);
+//IncrRegister(BKP_DR5);
+//IncrRegister(BKP_DR6);
+//IncrRegister(BKP_DR7);
+//IncrRegister(BKP_DR8);
+//IncrRegister(BKP_DR9);
+//#define BKP_DR10                          ((uint16_t)0x0028)
+
+
+
+//DOESN"T WORK
+//IncrRegister(BKP_DR11);
+//IncrRegister(BKP_DR12);
+//IncrRegister(BKP_DR13);
+//IncrRegister(BKP_DR14);
+//IncrRegister(BKP_DR15);
+//IncrRegister(BKP_DR16);
+//IncrRegister(BKP_DR17);
+//IncrRegister(BKP_DR18);
+//IncrRegister(BKP_DR19);
+//IncrRegister(BKP_DR20);
+//IncrRegister(BKP_DR21);
+//IncrRegister(BKP_DR22);
+//IncrRegister(BKP_DR23);
+//IncrRegister(BKP_DR24);
+//IncrRegister(BKP_DR25);
+//IncrRegister(BKP_DR26);
+//IncrRegister(BKP_DR27);
+//IncrRegister(BKP_DR28);
+//IncrRegister(BKP_DR29);
+//IncrRegister(BKP_DR30);
+//IncrRegister(BKP_DR31);
+//IncrRegister(BKP_DR32);
+//IncrRegister(BKP_DR33);
+//IncrRegister(BKP_DR34);
+//IncrRegister(BKP_DR35);
+//IncrRegister(BKP_DR36);
+//IncrRegister(BKP_DR37);
+//IncrRegister(BKP_DR38);
+//IncrRegister(BKP_DR39);
+//IncrRegister(BKP_DR40);
+//IncrRegister(BKP_DR41);
+//IncrRegister(BKP_DR42);
+
+//untested?
+
+
+
+
+
+    Serial.println("sleeping...");
+    Delay(5000);
+
+    Serial.println("resetting...");
+    Delay(1000);
+
+
+    USB_Cable_Config(DISABLE);
+    NVIC_SystemReset();
 }
 
 /* This function loops forever --------------------------------------------*/
@@ -52,123 +132,15 @@ void loop()
 	//This will run in a loop
 }
 
-/*******************************************************************************
- * Function Name  : tinkerDigitalRead
- * Description    : Reads the digital value of a given pin
- * Input          : Pin 
- * Output         : None.
- * Return         : Value of the pin (0 or 1) in INT type
-                    Returns a negative number on failure
- *******************************************************************************/
-int tinkerDigitalRead(String pin)
-{
-	//convert ascii to integer
-	int pinNumber = pin.charAt(1) - '0';
-	//Sanity check to see if the pin numbers are within limits
-	if (pinNumber< 0 || pinNumber >7) return -1;
-
-	if(pin.startsWith("D"))
-	{
-		pinMode(pinNumber, INPUT_PULLDOWN);
-		return digitalRead(pinNumber);
-	}
-	else if (pin.startsWith("A"))
-	{
-		pinMode(pinNumber+10, INPUT_PULLDOWN);
-		return digitalRead(pinNumber+10);
-	}
-	return -2;
+void IncrRegister(uint16_t addy) {
+    volatile uint16_t val = BKP_ReadBackupRegister(addy);
+    BKP_WriteBackupRegister(addy, val + 1);
+    Serial.println("Set " + String(addy) + " Register to " + String(val + 1));
+    Delay(250);
 }
+void ReadRegister(uint16_t addy) {
+    volatile uint16_t val = BKP_ReadBackupRegister(addy);
 
-/*******************************************************************************
- * Function Name  : tinkerDigitalWrite
- * Description    : Sets the specified pin HIGH or LOW
- * Input          : Pin and value
- * Output         : None.
- * Return         : 1 on success and a negative number on failure
- *******************************************************************************/
-int tinkerDigitalWrite(String command)
-{
-	bool value = 0;
-	//convert ascii to integer
-	int pinNumber = command.charAt(1) - '0';
-	//Sanity check to see if the pin numbers are within limits
-	if (pinNumber< 0 || pinNumber >7) return -1;
-
-	if(command.substring(3,7) == "HIGH") value = 1;
-	else if(command.substring(3,6) == "LOW") value = 0;
-	else return -2;
-
-	if(command.startsWith("D"))
-	{
-		pinMode(pinNumber, OUTPUT);
-		digitalWrite(pinNumber, value);
-		return 1;
-	}
-	else if(command.startsWith("A"))
-	{
-		pinMode(pinNumber+10, OUTPUT);
-		digitalWrite(pinNumber+10, value);
-		return 1;
-	}
-	else return -3;
-}
-
-/*******************************************************************************
- * Function Name  : tinkerAnalogRead
- * Description    : Reads the analog value of a pin
- * Input          : Pin 
- * Output         : None.
- * Return         : Returns the analog value in INT type (0 to 4095)
-                    Returns a negative number on failure
- *******************************************************************************/
-int tinkerAnalogRead(String pin)
-{
-	//convert ascii to integer
-	int pinNumber = pin.charAt(1) - '0';
-	//Sanity check to see if the pin numbers are within limits
-	if (pinNumber< 0 || pinNumber >7) return -1;
-
-	if(pin.startsWith("D"))
-	{
-		pinMode(pinNumber, INPUT);
-		return analogRead(pinNumber);
-	}
-	else if (pin.startsWith("A"))
-	{
-		pinMode(pinNumber+10, INPUT);
-		return analogRead(pinNumber+10);
-	}
-	return -2;
-}
-
-/*******************************************************************************
- * Function Name  : tinkerAnalogWrite
- * Description    : Writes an analog value (PWM) to the specified pin
- * Input          : Pin and Value (0 to 255)
- * Output         : None.
- * Return         : 1 on success and a negative number on failure
- *******************************************************************************/
-int tinkerAnalogWrite(String command)
-{
-	//convert ascii to integer
-	int pinNumber = command.charAt(1) - '0';
-	//Sanity check to see if the pin numbers are within limits
-	if (pinNumber< 0 || pinNumber >7) return -1;
-
-	String value = command.substring(3);
-
-	if(command.startsWith("D"))
-	{
-		pinMode(pinNumber, OUTPUT);
-		analogWrite(pinNumber, value.toInt());
-		return 1;
-	}
-	else if(command.startsWith("A"))
-	{
-		pinMode(pinNumber+10, OUTPUT);
-		analogWrite(pinNumber+10, value.toInt());
-		return 1;
-	}
-	else return -2;
+    Serial.println("Read " + String(addy) + " is " + String(val));
+    Delay(250);
 }

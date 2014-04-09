@@ -135,14 +135,14 @@ extern "C" void SparkCoreConfig(void)
 #ifdef SPARK_SFLASH_ENABLE
 	sFLASH_Init();
 #endif
-
-#ifdef SPARK_WLAN_ENABLE
-	/* Start Spark Wlan and connect to Wifi Router by default */
-	SPARK_WLAN_SETUP = 1;
-
-	/* Connect to Spark Cloud by default */
-	SPARK_CLOUD_CONNECT = 1;
-#endif
+//
+//#ifdef SPARK_WLAN_ENABLE
+//	/* Start Spark Wlan and connect to Wifi Router by default */
+//	SPARK_WLAN_SETUP = 1;
+//
+//	/* Connect to Spark Cloud by default */
+//	SPARK_CLOUD_CONNECT = 1;
+//#endif
 }
 
 /*******************************************************************************
@@ -164,6 +164,10 @@ int main(void)
     SPARK_WLAN_Setup(Multicast_Presence_Announcement);
   }
 #endif
+
+setup();
+return 0;
+
 
   /* Main loop */
   while (1)
