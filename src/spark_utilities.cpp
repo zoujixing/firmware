@@ -657,7 +657,7 @@ int Spark_Connect(void)
     default:
     case INVALID_INTERNET_ADDRESS:
     {
-      const char default_domain[] = "device.spark.io";
+      const char default_domain[] = "staging-device.spark.io";
       memcpy(server_addr.domain, default_domain, strlen(default_domain));
       // and fall through to domain name case
     }
