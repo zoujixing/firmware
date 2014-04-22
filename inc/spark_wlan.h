@@ -61,6 +61,8 @@ char *WLAN_BootLoader_Patch(unsigned long *length);
 uint32_t SPARK_WLAN_SetNetWatchDog(uint32_t timeOutInuS);
 void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void));
 void SPARK_WLAN_Loop(void);
+bool SPARK_WLAN_LatestSP(void);
+void SPARK_WLAN_Patch(void);
 
 /* Spark Cloud APIs */
 extern int Spark_Connect(void);
