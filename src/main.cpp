@@ -162,10 +162,6 @@ int main(void)
   if (SPARK_WLAN_SETUP)
   {
     SPARK_WLAN_Setup(Multicast_Presence_Announcement);
-    if (!SPARK_WLAN_LatestSP())
-    {
-      SPARK_WLAN_Patch();
-    }
   }
 #endif
 

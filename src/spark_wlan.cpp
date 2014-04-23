@@ -130,8 +130,9 @@ volatile uint8_t Spark_Error_Count;
 volatile uint8_t SPARK_WLAN_PATCH;
 
 //The following should be edited to match the cc3000 firmware patch
-const unsigned char SP_PACKAGE_ID = 1;
-const unsigned char SP_BUILD_NUMBER = 24;
+#define WLAN_PATCH_PACKAGE_ID		1
+#define WLAN_PATCH_BUILD_NUMBER		24
+#define WLAN_PATCH_MAX_ATTEMPTS		5	//Do not change this
 
 //Service Pack version P1.11.7.14.24 -  Driver patches
 const unsigned char wlan_drv_patch[8168] = { 0x00, 0x01, 0x00, 0x00, 0xE0, 0x1F, 0x00, 0x00, 0x5C, 0x04, 0x18, 0x00, 0xE4, 0x62, 0x08, 0x00, 0x96, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ,
@@ -374,7 +375,7 @@ bool SPARK_WLAN_LatestSP(void) {
     //read the current service pack version of the firmware on the cc3000
     if (nvmem_read_sp_version(patchVer) == 0)
     {
-        if ((patchVer[0] == SP_PACKAGE_ID) && (patchVer[1] == SP_BUILD_NUMBER))
+        if ((patchVer[0] == WLAN_PATCH_PACKAGE_ID) && (patchVer[1] == WLAN_PATCH_BUILD_NUMBER))
         {
             return true;
         }
@@ -383,7 +384,7 @@ bool SPARK_WLAN_LatestSP(void) {
     return false;
 }
 
-void SPARK_WLAN_Patch(void)
+int SPARK_WLAN_Patch(void)
 {
 	unsigned char *pRMParams;
 
@@ -394,12 +395,9 @@ void SPARK_WLAN_Patch(void)
 	LED_SetRGBColor(RGB_COLOR_MAGENTA);
 	LED_On(LED_RGB);
 
-	// Reset WLAN and request to load with no patches.
+	// Init WLAN and request to load with no patches.
 	// this is in order to overwrite restrictions to write to specific places in EEPROM
-	wlan_stop();
-	Delay(100);
-	wlan_start(1);
-	wlan_smart_config_set_prefix(aucCC3000_prefix);
+	SPARK_WLAN_Init(1);
 
 	// read MAC address
 	mac_status = nvmem_get_mac_address(cMacFromEeprom);
@@ -433,9 +431,7 @@ void SPARK_WLAN_Patch(void)
 	}
 
 	wlan_stop();
-	Delay(100);
-	wlan_start(1);
-	wlan_smart_config_set_prefix(aucCC3000_prefix);
+	SPARK_WLAN_Init(1);
 
 	return_status = 1;
 
@@ -476,15 +472,19 @@ void SPARK_WLAN_Patch(void)
 		ucStatus_FW = nvmem_write_patch(NVMEM_WLAN_FW_SP_FILEID, fw_length, fw_patch);
 	}
 
-	// This tells the WLAN setup to clear the WiFi user profiles on bootup
-	NVMEM_SPARK_Reset_SysFlag = 0x0001;
-	Save_SystemFlags();
+	// Init WLAN and request to load with patches.
+	SPARK_WLAN_Init(0);
+
+	if (!SPARK_WLAN_LatestSP())
+	{
+		//Patch update failed
+		return -1;
+	}
 
 	// Patch Process Completed
 	SPARK_WLAN_PATCH = 0;
 
-	// Reset System/WLAN and request to load with patches.
-	NVIC_SystemReset();
+	return 0;
 }
 
 /************************************************************************************************/
@@ -765,11 +765,8 @@ uint32_t SPARK_WLAN_SetNetWatchDog(uint32_t timeOutInMS)
   return rv;
 }
 
-
-void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
+void SPARK_WLAN_Init(unsigned short requestPatch)
 {
-	announce_presence = presence_announcement_callback;
-
 	/* Initialize CC3000's CS, EN and INT pins to their default states */
 	CC3000_WIFI_Init();
 
@@ -783,12 +780,55 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 	Delay(100);
 
 	/* Trigger a WLAN device */
-	wlan_start(0);
-	SPARK_WLAN_STARTED = 1;
-	SPARK_LED_FADE = 0;
+	wlan_start(requestPatch);
+	wlan_smart_config_set_prefix(aucCC3000_prefix);
 
 	/* Mask out all non-required events from CC3000 */
 	wlan_set_event_mask(HCI_EVNT_WLAN_KEEPALIVE | HCI_EVNT_WLAN_UNSOL_INIT);
+}
+
+void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
+{
+	announce_presence = presence_announcement_callback;
+
+    /* Init WLAN and request to load with patches */
+	SPARK_WLAN_Init(0);
+	SPARK_WLAN_STARTED = 1;
+	SPARK_LED_FADE = 0;
+
+	while (1)
+	{
+		// During patch-programming, NVMEM_SPARK_Reset_SysFlag is also used to count patch attempts
+		if ((SPARK_WLAN_LatestSP() != true) && (NVMEM_SPARK_Reset_SysFlag != WLAN_PATCH_MAX_ATTEMPTS))
+		{
+			if (SPARK_WLAN_Patch() == 0)
+			{
+				// if patch has been applied successfully
+				// Indicate to clear NVMEM_Spark_File_Data since patching will erase existing user profiles
+				// Comment the below 2 lines if not required to display flashing blue
+				NVMEM_SPARK_Reset_SysFlag = 0x0001;
+				Save_SystemFlags();
+			}
+			else
+			{
+				// if patch has not been applied
+				// increment a non-volatile count of attempts and reboot.
+				if(NVMEM_SPARK_Reset_SysFlag == 0xFFFF)
+				{
+					NVMEM_SPARK_Reset_SysFlag = 0x0000;
+				}
+
+				NVMEM_SPARK_Reset_SysFlag += 1;
+				Save_SystemFlags();
+				NVIC_SystemReset();
+			}
+		}
+		else
+		{
+			// Break the while loop to continue executing the rest of the firmware
+			break;
+		}
+	}
 
 	if(NVMEM_SPARK_Reset_SysFlag == 0x0001 || nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != NVMEM_SPARK_FILE_SIZE)
 	{
@@ -820,12 +860,6 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 	{
 		LED_SetRGBColor(RGB_COLOR_GREEN);
 		LED_On(LED_RGB);
-	}
-
-	nvmem_read_sp_version(patchVer);
-	if (patchVer[1] == 24)//19 for old patch
-	{
-		/* Latest Patch Available after flashing "cc3000-patch-programmer.bin" */
 	}
 
 	Clear_NetApp_Dhcp();
