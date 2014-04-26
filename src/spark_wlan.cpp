@@ -803,6 +803,9 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 			if (SPARK_WLAN_Patch() == 0)
 			{
 				// if patch has been applied successfully
+				// Indicate to re-apply WLAN profiles stored in Internal Flash
+				CC3000_Patch_Updated_SysFlag = 0x0001;
+
 				// Indicate to clear NVMEM_Spark_File_Data since patching will erase existing user profiles
 				// Comment the below 2 lines if not required to display flashing blue
 				NVMEM_SPARK_Reset_SysFlag = 0x0001;
