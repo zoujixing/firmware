@@ -797,27 +797,32 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 
 	while (1)
 	{
-		if ((SPARK_WLAN_LatestSP() != true) && (CC3000_Patch_Updated_SysFlag != WLAN_PATCH_MAX_ATTEMPTS))
+		//We are avoiding new non-volatile flag here so as not to upset old bootloader
+		//NVMEM_SPARK_Reset_SysFlag now serves 3 purposes:
+		//NVMEM_SPARK_Reset_SysFlag : 0xABCD, CC3000 patch successfully applied
+		//NVMEM_SPARK_Reset_SysFlag : Max 5, CC3000 patch retry attempts
+		//NVMEM_SPARK_Reset_SysFlag : 1, delete stored wlan profiles in CC3000
+		if ((SPARK_WLAN_LatestSP() != true) && (NVMEM_SPARK_Reset_SysFlag != WLAN_PATCH_MAX_ATTEMPTS))
 		{
 			if (SPARK_WLAN_Patch() == 0)
 			{
 				// if patch has been applied successfully
 				// Indicate to re-apply WLAN profiles stored in Internal Flash
-				CC3000_Patch_Updated_SysFlag = 0xABCD;
+				NVMEM_SPARK_Reset_SysFlag = 0xABCD;
 				Save_SystemFlags();
 			}
 			else
 			{
 				// if patch has not been applied
 				// increment a non-volatile count of attempts and reboot.
-				if(CC3000_Patch_Updated_SysFlag > WLAN_PATCH_MAX_ATTEMPTS)
+				if(NVMEM_SPARK_Reset_SysFlag > WLAN_PATCH_MAX_ATTEMPTS)
 				{
-					//Initialize CC3000_Patch_Updated_SysFlag to 0 when using for the first time
-					CC3000_Patch_Updated_SysFlag = 0;
+					//Initialize NVMEM_SPARK_Reset_SysFlag to 0 when using for the first time
+					NVMEM_SPARK_Reset_SysFlag = 0;
 				}
 
 				//Increment number of failed attempt
-				CC3000_Patch_Updated_SysFlag += 1;
+				NVMEM_SPARK_Reset_SysFlag += 1;
 				Save_SystemFlags();
 				NVIC_SystemReset();
 			}
