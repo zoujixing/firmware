@@ -797,30 +797,27 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 
 	while (1)
 	{
-		// During patch-programming, NVMEM_SPARK_Reset_SysFlag is also used to count patch attempts
-		if ((SPARK_WLAN_LatestSP() != true) && (NVMEM_SPARK_Reset_SysFlag != WLAN_PATCH_MAX_ATTEMPTS))
+		if ((SPARK_WLAN_LatestSP() != true) && (CC3000_Patch_Updated_SysFlag != WLAN_PATCH_MAX_ATTEMPTS))
 		{
 			if (SPARK_WLAN_Patch() == 0)
 			{
 				// if patch has been applied successfully
 				// Indicate to re-apply WLAN profiles stored in Internal Flash
-				CC3000_Patch_Updated_SysFlag = 0x0001;
-
-				// Indicate to clear NVMEM_Spark_File_Data since patching will erase existing user profiles
-				// Comment the below 2 lines if not required to display flashing blue
-				NVMEM_SPARK_Reset_SysFlag = 0x0001;
+				CC3000_Patch_Updated_SysFlag = 0xABCD;
 				Save_SystemFlags();
 			}
 			else
 			{
 				// if patch has not been applied
 				// increment a non-volatile count of attempts and reboot.
-				if(NVMEM_SPARK_Reset_SysFlag == 0xFFFF)
+				if(CC3000_Patch_Updated_SysFlag > WLAN_PATCH_MAX_ATTEMPTS)
 				{
-					NVMEM_SPARK_Reset_SysFlag = 0x0000;
+					//Initialize CC3000_Patch_Updated_SysFlag to 0 when using for the first time
+					CC3000_Patch_Updated_SysFlag = 0;
 				}
 
-				NVMEM_SPARK_Reset_SysFlag += 1;
+				//Increment number of failed attempt
+				CC3000_Patch_Updated_SysFlag += 1;
 				Save_SystemFlags();
 				NVIC_SystemReset();
 			}
