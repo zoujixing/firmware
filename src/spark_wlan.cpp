@@ -436,7 +436,7 @@ int SPARK_WLAN_Patch(void)
     wlan_ioctl_del_profile(255);
 
     // Read MAC address.
-    mac_status = nvmem_get_mac_address(cMacFromEeprom);
+    mac_status = ((MAC_ADDR_LEN == nvmem_get_mac_address(cMacFromEeprom)) ?  0 : -1);
 
     return_status = 1;
 
@@ -451,7 +451,7 @@ int SPARK_WLAN_Patch(void)
 
         for (index = 0; index < 16; index++)
         {
-            return_status |= nvmem_read(NVMEM_RM_FILEID, 8, 8*index, pRMParams);
+            return_status |= ((8 == nvmem_read(NVMEM_RM_FILEID, 8, 8*index, pRMParams)) ? 0 : -1);
             pRMParams += 8;
         }
         counter++;
@@ -547,8 +547,8 @@ int SPARK_WLAN_Patch(void)
 	SPARK_WLAN_Init(0);
 
     //
-    // If MAC does not exist, turn on LED1.
-    // It is recommended that the user will write a valid mac address.
+    // If MAC does not exist, it is recommended that
+    // the user will write a valid mac address.
     //
     if (mac_status != 0)
     {
