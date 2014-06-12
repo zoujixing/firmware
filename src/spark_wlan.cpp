@@ -490,37 +490,6 @@ int SPARK_WLAN_Patch(void)
     // Init WLAN and request to load with patches.
     SPARK_WLAN_Init(0);
 
-    //
-    // If the set MAC address is corrupted/invalid,
-    // create and set a Spark specified MAC address
-    // first 3 bytes representing TI vendor ID
-    // plus 3,9,10 byte offset from STM32's device ID
-    //
-    if (cMacFromEeprom[0] != 0x08 || cMacFromEeprom[1] != 0x00 || cMacFromEeprom[2] != 0x28)//check for TI id
-    {
-        if (!(cMacFromEeprom[0] == 0x00 && cMacFromEeprom[1] == 0x19 && cMacFromEeprom[2] == 0x94))//check for Jorjin id
-        {
-            //Write a valid TI vendor based MAC address here
-
-            char deviceID[12];
-            memcpy(deviceID, (char *)ID1, 12);
-
-            cMacFromEeprom[0] = 0x08;
-            cMacFromEeprom[1] = 0x00;
-            cMacFromEeprom[2] = 0x28;
-            cMacFromEeprom[3] = deviceID[2];//3rd byte
-            cMacFromEeprom[4] = deviceID[8];//9th byte
-            cMacFromEeprom[5] = deviceID[9];//10th byte
-
-            return_status = 1;
-
-            while (return_status)
-            {
-                return_status = nvmem_set_mac_address(cMacFromEeprom);
-            }
-        }
-    }
-
     if (!SPARK_WLAN_LatestSP())
     {
         //Patch update failed
@@ -872,6 +841,37 @@ void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
 			break;
 		}
 	}
+
+        //
+        // If the set MAC address is corrupted/invalid,
+        // create and set a Spark specified MAC address
+        // first 3 bytes representing TI vendor ID
+        // plus 3,9,10 byte offset from STM32's device ID
+        //
+        if (cMacFromEeprom[0] != 0x08 || cMacFromEeprom[1] != 0x00 || cMacFromEeprom[2] != 0x28)//check for TI id
+        {
+            if (!(cMacFromEeprom[0] == 0x00 && cMacFromEeprom[1] == 0x19 && cMacFromEeprom[2] == 0x94))//check for Jorjin id
+            {
+                //Write a valid TI vendor based MAC address here
+
+                char deviceID[12];
+                memcpy(deviceID, (char *)ID1, 12);
+
+                cMacFromEeprom[0] = 0x08;
+                cMacFromEeprom[1] = 0x00;
+                cMacFromEeprom[2] = 0x28;
+                cMacFromEeprom[3] = deviceID[2];//3rd byte
+                cMacFromEeprom[4] = deviceID[8];//9th byte
+                cMacFromEeprom[5] = deviceID[9];//10th byte
+
+                return_status = 1;
+
+                while (return_status)
+                {
+                    return_status = nvmem_set_mac_address(cMacFromEeprom);
+                }
+            }
+        }
 
 	if(NVMEM_SPARK_Reset_SysFlag == 0x0001 || nvmem_read(NVMEM_SPARK_FILE_ID, NVMEM_SPARK_FILE_SIZE, 0, NVMEM_Spark_File_Data) != NVMEM_SPARK_FILE_SIZE)
 	{
