@@ -30,7 +30,6 @@
 #include "netapp.h"
 #include "string.h"
 #include <stdarg.h>
-#include "spark_protocol.h"
 
 SparkProtocol spark_protocol;
 
@@ -218,6 +217,56 @@ void SparkClass::publish(String eventName, String eventData, int ttl)
 void SparkClass::publish(String eventName, String eventData, int ttl, Spark_Event_TypeDef eventType)
 {
   publish(eventName.c_str(), eventData.c_str(), ttl, eventType);
+}
+
+bool SparkClass::subscribe(const char *eventName, EventHandler handler)
+{
+  bool success = spark_protocol.add_event_handler(eventName, handler);
+  if (success)
+  {
+    success = spark_protocol.send_subscription(eventName, SubscriptionScope::FIREHOSE);
+  }
+  return success;
+}
+
+bool SparkClass::subscribe(const char *eventName, EventHandler handler, Spark_Subscription_Scope_TypeDef scope)
+{
+  bool success = spark_protocol.add_event_handler(eventName, handler);
+  if (success)
+  {
+    success = spark_protocol.send_subscription(eventName, SubscriptionScope::MY_DEVICES);
+  }
+  return success;
+}
+
+bool SparkClass::subscribe(const char *eventName, EventHandler handler, const char *deviceID)
+{
+  bool success = spark_protocol.add_event_handler(eventName, handler);
+  if (success)
+  {
+    success = spark_protocol.send_subscription(eventName, deviceID);
+  }
+  return success;
+}
+
+bool SparkClass::subscribe(String eventName, EventHandler handler)
+{
+  return subscribe(eventName.c_str(), handler);
+}
+
+bool SparkClass::subscribe(String eventName, EventHandler handler, Spark_Subscription_Scope_TypeDef scope)
+{
+  return subscribe(eventName.c_str(), handler, scope);
+}
+
+bool SparkClass::subscribe(String eventName, EventHandler handler, String deviceID)
+{
+  return subscribe(eventName.c_str(), handler, deviceID.c_str());
+}
+
+void SparkClass::syncTime(void)
+{
+  spark_protocol.send_time_request();
 }
 
 void SparkClass::sleep(Spark_Sleep_TypeDef sleepMode, long seconds)
@@ -458,6 +507,7 @@ void Spark_Protocol_Init(void)
     callbacks.save_firmware_chunk = Spark_Save_Firmware_Chunk;
     callbacks.signal = Spark_Signal;
     callbacks.millis = millis;
+    callbacks.set_time = Time.setTime;
 
     SparkDescriptor descriptor;
     descriptor.num_functions = numUserFunctions;
@@ -497,6 +547,8 @@ int Spark_Handshake(void)
   char patchstr[8];
   snprintf(patchstr, 8, "%d.%d", patchver[0], patchver[1]);
   Spark.publish("spark/cc3000-patch-version", patchstr, 60, PRIVATE);
+
+  spark_protocol.send_time_request();
 
   return err;
 }
@@ -571,11 +623,6 @@ void Spark_Signal(bool on)
     LED_Signaling_Stop();
     LED_Spark_Signal = 0;
   }
-}
-
-void Spark_SetTime(unsigned long dateTime)
-{
-	Time.setTime(dateTime);
 }
 
 int Internet_Test(void)
