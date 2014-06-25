@@ -364,7 +364,7 @@ int SPARK_WLAN_Patch(void)
     SPARK_WLAN_PATCH = 1;
 
     /* Set RGB Led Flashing color to Magenta */
-    LED_SetRGBColor(RGB_COLOR_MAGENTA);
+    LED_SetRGBColor(RGB_COLOR_ORANGE);
     LED_On(LED_RGB);
 
     // Init WLAN and request to load with no patches.
