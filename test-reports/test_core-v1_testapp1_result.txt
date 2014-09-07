@@ -1,4 +1,4 @@
-passed=17
+passed=8
 failed=0
 skipped=0
-count=17
+count=8
