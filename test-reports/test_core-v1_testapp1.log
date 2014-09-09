@@ -6,4 +6,12 @@ Test LED_ControlledReturnsTrueWhenControlled passed.
 Test LED_SettingRGBAfterOverrideShouldChangeLED passed.
 Test LED_SettingRGBWithoutOverrideShouldNotChangeLED passed.
 Test LED_StaticWhenControlled passed.
-Test summary: 8 passed, 0 failed, and 0 skipped, out of 8 test(s).
+Test Negative_range_values_are_within_range passed.
+Test Positive_range_values_are_within_range passed.
+Test Random_values_consistent_with_the_same_seed passed.
+Test Random_values_different_with_different_seeds passed.
+Test ZeroCrossing_range_values_are_within_range passed.
+Test closed_range_returns_same_value passed.
+Test empty_range_returns_min passed.
+Test random_zero_returns_zero passed.
+Test summary: 16 passed, 0 failed, and 0 skipped, out of 16 test(s).
