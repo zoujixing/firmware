@@ -83,12 +83,20 @@ endif
 TARGET ?= core-firmware
 TARGETDIR ?= 
 
+# Target this makefile is building. (let our target be adjustable)
+CORE_FIRMWARE ?= core-firmware
+TARGET = $(CORE_FIRMWARE)
 
 # Find all build.mk makefiles in each source directory in the src tree.
 SRC_MAKEFILES := $(call rwildcard,$(SRC_PATH)src,build.mk)
 
+# Add our user folder.
+USER_DIR ?=user
+USER_MAKEFILES := $(call rwildcard,$(SRC_PATH)/$(USER_DIR),subdir.mk)
+
 # Include all build.mk defines source files.
 include $(SRC_MAKEFILES)
+include $(USER_MAKEFILES)
 
 # Paths to dependent projects, referenced from root of this project
 LIB_CORE_COMMON_PATH = ../core-common-lib/
@@ -266,4 +274,3 @@ clean:
 
 # Include auto generated dependency files
 -include $(ALLDEPS)
-
