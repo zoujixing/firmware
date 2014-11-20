@@ -45,6 +45,7 @@
 extern "C" {
 #endif
 
+
 #ifndef NULL
 #define NULL        		(0)
 #endif
@@ -55,6 +56,10 @@ extern "C" {
 
 #ifndef TRUE
 #define TRUE        		(!FALSE)
+#endif
+
+#ifndef OK
+#define OK          		(0)
 #endif
 
 #ifndef _INT8
@@ -77,6 +82,11 @@ typedef signed short  		INT16;
 typedef unsigned short   	UINT16;
 #endif
 
+#ifndef _BOOLEAN
+#define _BOOLEAN
+typedef unsigned char   	BOOLEAN;
+#endif
+
 #ifndef _INT32
 #define _INT32
 typedef signed long   		INT32;
@@ -87,6 +97,7 @@ typedef signed long   		INT32;
 typedef unsigned long   	UINT32;
 #endif
 
+typedef int             	INT;
 typedef char            	CHAR;
 
 #ifdef	__cplusplus

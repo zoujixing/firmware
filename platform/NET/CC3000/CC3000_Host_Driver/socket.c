@@ -1,38 +1,38 @@
 /*****************************************************************************
- *
- *  socket.c  - CC3000 Host Driver Implementation.
- *  Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
- *
+*
+*  socket.c  - CC3000 Host Driver Implementation.
+*  Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+*
  *  Updated: 14-Feb-2014 David Sidrane <david_s5@usa.net>
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *    Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the
- *    distribution.
- *
- *    Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- *****************************************************************************/
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted provided that the following conditions
+*  are met:
+*
+*    Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+*
+*    Redistributions in binary form must reproduce the above copyright
+*    notice, this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the   
+*    distribution.
+*
+*    Neither the name of Texas Instruments Incorporated nor the names of
+*    its contributors may be used to endorse or promote products derived
+*    from this software without specific prior written permission.
+*
+*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
+*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+*  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
+*  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+*  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+*  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+*  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+*****************************************************************************/
 
 //*****************************************************************************
 //
@@ -41,6 +41,9 @@
 //
 //*****************************************************************************
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "hci.h"
 #include "socket.h"
 #include "evnt_handler.h"
@@ -49,8 +52,7 @@
 #include "debug.h"
 #include "spark_macros.h"
 
-#include <string.h>
-#include <stdlib.h>
+
 
 
 //Enable this flag if and only if you must comply with BSD socket 
@@ -95,6 +97,9 @@
 
 #define MDNS_DEVICE_SERVICE_MAX_LENGTH 	(32)
 
+#ifdef MDNS_ADVERTISE_HOST
+extern UINT8 localIP[4];
+#endif
 
 //*****************************************************************************
 //
@@ -116,9 +121,6 @@ INT16 HostFlowControlConsumeBuff(INT16 sd)
 {
 #ifndef SEND_NON_BLOCKING
 	/* wait in busy loop */
-	volatile system_tick_t start = GetSystem1MsTick();
-
-	bool stop = false;
 	do
 	{
 		// In case last transmission failed then we will return the last failure 
@@ -131,26 +133,12 @@ INT16 HostFlowControlConsumeBuff(INT16 sd)
 			return errno;
 		}
 
-		if(SOCKET_STATUS_ACTIVE != get_socket_active_status(sd)) {
+		if(SOCKET_STATUS_ACTIVE != get_socket_active_status(sd))
 			return -1;
-		}
+	} while(0 == tSLInformation.usNumberOfFreeBuffers);
 
-		volatile system_tick_t now = GetSystem1MsTick();
-		volatile long elapsed = now - start;
-		if (elapsed < 0) { // Did we wrap
-			elapsed = start + now; // yes now
-		}
-		if (elapsed >= cc3000__event_timeout_ms) {
-			ERROR("Timeout waiting on on buffers now %ld start %ld elapsed %ld cc3000__event_timeout_ms %ld",now,start,elapsed,cc3000__event_timeout_ms);
-			return -1;
-		}
+	tSLInformation.usNumberOfFreeBuffers--;
 
-		// Do an atomic decrement if > 0
-		UINT16 freeBuffers = tSLInformation.usNumberOfFreeBuffers;
-		if (0 < freeBuffers) {
-			stop = __sync_bool_compare_and_swap(&tSLInformation.usNumberOfFreeBuffers, freeBuffers, freeBuffers-1);
-		}
-	} while (!stop);
 	return 0;
 #else
 
@@ -203,7 +191,7 @@ INT16 HostFlowControlConsumeBuff(INT16 sd)
 //
 //*****************************************************************************
 
-INT16 socket(INT32 domain, INT32 type, INT32 protocol)
+INT32 socket(INT32 domain, INT32 type, INT32 protocol)
 {
 	INT32 ret;
 	UINT8 *ptr, *args;
@@ -257,7 +245,7 @@ INT32 closesocket(INT32 sd)
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_CLOSE_SOCKET,
-			ptr, SOCKET_CLOSE_PARAMS_LEN);
+		ptr, SOCKET_CLOSE_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_CLOSE_SOCKET, &ret);
@@ -330,7 +318,7 @@ INT32 accept(INT32 sd, sockaddr *addr, socklen_t *addrlen)
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_ACCEPT,
-			ptr, SOCKET_ACCEPT_PARAMS_LEN);
+		ptr, SOCKET_ACCEPT_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_ACCEPT, &tAcceptReturnArguments);
@@ -397,7 +385,7 @@ INT32 bind(INT32 sd, const sockaddr *addr, INT32 addrlen)
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_BIND,
-			ptr, SOCKET_BIND_PARAMS_LEN);
+		ptr, SOCKET_BIND_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_BIND, &ret);
@@ -445,7 +433,7 @@ INT32 listen(INT32 sd, INT32 backlog)
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_LISTEN,
-			ptr, SOCKET_LISTEN_PARAMS_LEN);
+		ptr, SOCKET_LISTEN_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_LISTEN, &ret);
@@ -475,7 +463,7 @@ INT32 listen(INT32 sd, INT32 backlog)
 
 #ifndef CC3000_TINY_DRIVER
 INT16 gethostbyname(CHAR * hostname, UINT16 usNameLen, 
-		UINT32* out_ip_addr)
+	UINT32* out_ip_addr)
 {
 	tBsdGethostbynameParams ret;
 	UINT8 *ptr, *args;
@@ -497,7 +485,7 @@ INT16 gethostbyname(CHAR * hostname, UINT16 usNameLen,
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_GETHOSTNAME, ptr, SOCKET_GET_HOST_BY_NAME_PARAMS_LEN
-			+ usNameLen - 1);
+		+ usNameLen - 1);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_EVNT_BSD_GETHOSTBYNAME, &ret);
@@ -558,7 +546,7 @@ INT32 connect(INT32 sd, const sockaddr *addr, INT32 addrlen)
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_CONNECT,
-			ptr, SOCKET_CONNECT_PARAMS_LEN);
+		ptr, SOCKET_CONNECT_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_CONNECT, &ret);
@@ -608,7 +596,7 @@ INT32 connect(INT32 sd, const sockaddr *addr, INT32 addrlen)
 //*****************************************************************************
 
 INT16 select(INT32 nfds, fd_set *readsds, fd_set *writesds, fd_set *exceptsds, 
-		struct timeval *timeout)
+struct timeval *timeout)
 {
 	UINT8 *ptr, *args;
 	tBsdSelectRecvParams tParams;
@@ -641,7 +629,7 @@ INT16 select(INT32 nfds, fd_set *readsds, fd_set *writesds, fd_set *exceptsds,
 	if (timeout)
 	{
 		if ( 0 == timeout->tv_sec && timeout->tv_usec < 
-				SELECT_TIMEOUT_MIN_MICRO_SECONDS)
+			SELECT_TIMEOUT_MIN_MICRO_SECONDS)
 		{
 			timeout->tv_usec = SELECT_TIMEOUT_MIN_MICRO_SECONDS;
 		}
@@ -716,15 +704,21 @@ INT16 select(INT32 nfds, fd_set *readsds, fd_set *writesds, fd_set *exceptsds,
 //!          value is to be supplied or returned, option_value may be NULL.
 //!
 //!  @Note   On this version the following two socket options are enabled:
-//!    			 The only protocol level supported in this version
+//!          The only protocol level supported in this version
 //!          is SOL_SOCKET (level).
-//!		       1. SOCKOPT_RECV_TIMEOUT (optname)
-//!			      SOCKOPT_RECV_TIMEOUT configures recv and recvfrom timeout 
+//!           1. SOCKOPT_RECV_NONBLOCK (optname)
+//!           SOCKOPT_RECV_NONBLOCK sets the recv and recvfrom 
+//!           non-blocking modes on or off.
+//!           In that case optval should be SOCK_ON or SOCK_OFF (optval).
+//!
+//!           2. SOCKOPT_RECV_TIMEOUT (optname)
+//!           SOCKOPT_RECV_TIMEOUT configures recv and recvfrom timeout 
 //!           in milliseconds.
-//!		        In that case optval should be pointer to UINT32.
-//!		       2. SOCKOPT_NONBLOCK (optname). sets the socket non-blocking mode on 
-//!           or off.
-//!		        In that case optval should be SOCK_ON or SOCK_OFF (optval).
+//!           In that case optval should be pointer to UINT32.
+//!		       
+//!           3. SOCKOPT_ACCEPT_NONBLOCK (optname). sets the socket accept 
+//!           non-blocking mode on or off.
+//!           In that case optval should be SOCK_ON or SOCK_OFF (optval).
 //!
 //!  @sa getsockopt
 //
@@ -732,7 +726,7 @@ INT16 select(INT32 nfds, fd_set *readsds, fd_set *writesds, fd_set *exceptsds,
 
 #ifndef CC3000_TINY_DRIVER
 INT16 setsockopt(INT32 sd, INT32 level, INT32 optname, const void *optval,
-		socklen_t optlen)
+	socklen_t optlen)
 {
 	INT32 ret;
 	UINT8 *ptr, *args;
@@ -750,7 +744,7 @@ INT16 setsockopt(INT32 sd, INT32 level, INT32 optname, const void *optval,
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_SETSOCKOPT,
-			ptr, SOCKET_SET_SOCK_OPT_PARAMS_LEN  + optlen);
+		ptr, SOCKET_SET_SOCK_OPT_PARAMS_LEN  + optlen);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_SETSOCKOPT, &ret);
@@ -802,13 +796,19 @@ INT16 setsockopt(INT32 sd, INT32 level, INT32 optname, const void *optval,
 //!  @Note   On this version the following two socket options are enabled:
 //!    			 The only protocol level supported in this version
 //!          is SOL_SOCKET (level).
-//!		       1. SOCKOPT_RECV_TIMEOUT (optname)
-//!			      SOCKOPT_RECV_TIMEOUT configures recv and recvfrom timeout 
+//!           1. SOCKOPT_RECV_NONBLOCK (optname)
+//!           SOCKOPT_RECV_NONBLOCK sets the recv and recvfrom 
+//!           non-blocking modes on or off.
+//!           In that case optval should be SOCK_ON or SOCK_OFF (optval).
+//!
+//!           2. SOCKOPT_RECV_TIMEOUT (optname)
+//!           SOCKOPT_RECV_TIMEOUT configures recv and recvfrom timeout 
 //!           in milliseconds.
-//!		        In that case optval should be pointer to UINT32.
-//!		       2. SOCKOPT_NONBLOCK (optname). sets the socket non-blocking mode on 
-//!           or off.
-//!		        In that case optval should be SOCK_ON or SOCK_OFF (optval).
+//!           In that case optval should be pointer to UINT32.
+//!
+//!           3. SOCKOPT_ACCEPT_NONBLOCK (optname). sets the socket accept 
+//!           non-blocking mode on or off.
+//!           In that case optval should be SOCK_ON or SOCK_OFF (optval).
 //!
 //!  @sa setsockopt
 //
@@ -829,7 +829,7 @@ INT16 getsockopt (INT32 sd, INT32 level, INT32 optname, void *optval, socklen_t 
 
 	// Initiate a HCI command
 	hci_command_send(HCI_CMND_GETSOCKOPT,
-			ptr, SOCKET_GET_SOCK_OPT_PARAMS_LEN);
+		ptr, SOCKET_GET_SOCK_OPT_PARAMS_LEN);
 
 	// Since we are in blocking state - wait for event complete
 	SimpleLinkWaitEvent(HCI_CMND_GETSOCKOPT, &tRetParams);
@@ -869,7 +869,7 @@ INT16 getsockopt (INT32 sd, INT32 level, INT32 optname, void *optval, socklen_t 
 //
 //*****************************************************************************
 INT16 simple_link_recv(INT32 sd, void *buf, INT32 len, INT32 flags, sockaddr *from,
-		socklen_t *fromlen, INT32 opcode)
+	socklen_t *fromlen, INT32 opcode)
 {
 	UINT8 *ptr, *args;
 	tBsdReadReturnParams tSocketReadEvent;
@@ -893,17 +893,7 @@ INT16 simple_link_recv(INT32 sd, void *buf, INT32 len, INT32 flags, sockaddr *fr
 	{
 		// Wait for the data in a synchronous way. Here we assume that the bug is 
 		// big enough to store also parameters of receive from too....
-		long lenRead; // Let's look at length
-		SimpleLinkWaitData(buf, (unsigned char *)from, &lenRead);
-
-		// return it if wanted
-		if (fromlen) {
-			*fromlen =  lenRead;
-		}
-		// Error ?
-		if (lenRead <= 0) {
-			tSocketReadEvent.iNumberOfBytes = lenRead;
-		}
+		SimpleLinkWaitData(buf, (UINT8 *)from, (UINT32 *)fromlen);
 	}
 
 	errno = tSocketReadEvent.iNumberOfBytes;
@@ -967,10 +957,10 @@ INT16 recv(INT32 sd, void *buf, INT32 len, INT32 flags)
 //
 //*****************************************************************************
 INT16 recvfrom(INT32 sd, void *buf, INT32 len, INT32 flags, sockaddr *from,
-		socklen_t *fromlen)
+	socklen_t *fromlen)
 {
 	return(simple_link_recv(sd, buf, len, flags, from, fromlen,
-			HCI_CMND_RECVFROM));
+		HCI_CMND_RECVFROM));
 }
 
 //*****************************************************************************
@@ -994,11 +984,11 @@ INT16 recvfrom(INT32 sd, void *buf, INT32 len, INT32 flags, sockaddr *from,
 //
 //*****************************************************************************
 INT16 simple_link_send(INT32 sd, const void *buf, INT32 len, INT32 flags,
-		const sockaddr *to, INT32 tolen, INT32 opcode)
+	const sockaddr *to, INT32 tolen, INT32 opcode)
 {    
 	UINT8 uArgSize=0,  addrlen;
-	UINT8 *ptr, *pDataPtr = NULL, *args;
-	UINT32 addr_offset = 0;
+	UINT8 *ptr, *pDataPtr = NULL, *args = NULL;
+	UINT32 addr_offset =0;
 	INT16 res;
 	tBsdReadReturnParams tSocketSendEvent;
 
@@ -1019,27 +1009,27 @@ INT16 simple_link_send(INT32 sd, const void *buf, INT32 len, INT32 flags,
 	switch(opcode)
 	{ 
 	case HCI_CMND_SENDTO:
-	{
-		addr_offset = len + sizeof(len) + sizeof(len);
-		addrlen = 8;
-		uArgSize = SOCKET_SENDTO_PARAMS_LEN;
-		pDataPtr = ptr + HEADERS_SIZE_DATA + SOCKET_SENDTO_PARAMS_LEN;
-		break;
-	}
+		{
+			addr_offset = len + sizeof(len) + sizeof(len);
+			addrlen = 8;
+			uArgSize = SOCKET_SENDTO_PARAMS_LEN;
+			pDataPtr = ptr + HEADERS_SIZE_DATA + SOCKET_SENDTO_PARAMS_LEN;
+			break;
+		}
 
 	case HCI_CMND_SEND:
-	{
-		tolen = 0;
-		to = NULL;
-		uArgSize = HCI_CMND_SEND_ARG_LENGTH;
-		pDataPtr = ptr + HEADERS_SIZE_DATA + HCI_CMND_SEND_ARG_LENGTH;
-		break;
-	}
+		{
+			tolen = 0;
+			to = NULL;
+			uArgSize = HCI_CMND_SEND_ARG_LENGTH;
+			pDataPtr = ptr + HEADERS_SIZE_DATA + HCI_CMND_SEND_ARG_LENGTH;
+			break;
+		}
 
 	default:
-	{
-		break;
-	}
+		{
+			break;
+		}
 	}
 
 	// Fill in temporary command buffer
@@ -1071,7 +1061,7 @@ INT16 simple_link_send(INT32 sd, const void *buf, INT32 len, INT32 flags,
 	else
 		SimpleLinkWaitEvent(HCI_EVNT_SEND, &tSocketSendEvent);
 
-	return	(tSocketSendEvent.iNumberOfBytes);
+	return	(len);
 }
 
 
@@ -1129,11 +1119,12 @@ INT16 send(INT32 sd, const void *buf, INT32 len, INT32 flags)
 //*****************************************************************************
 
 INT16 sendto(INT32 sd, const void *buf, INT32 len, INT32 flags, const sockaddr *to,
-		socklen_t tolen)
+	socklen_t tolen)
 {
 	return(simple_link_send(sd, buf, len, flags, to, tolen, HCI_CMND_SENDTO));
 }
 
+#ifndef MDNS_ADVERTISE_HOST
 //*****************************************************************************
 //
 //!  mdnsAdvertiser
@@ -1142,16 +1133,16 @@ INT16 sendto(INT32 sd, const void *buf, INT32 len, INT32 flags, const sockaddr *
 //!  @param[in] deviceServiceName   Service name as part of the published
 //!                                 canonical domain name
 //!  @param[in] deviceServiceNameLength   Length of the service name - up to 32 chars
-//!  
 //!
-//!  @return   On success, zero is returned, return SOC_ERROR if socket was not 
+//!
+//!  @return   On success, zero is returned, return SOC_ERROR if socket was not
 //!            opened successfully, or if an error occurred.
 //!
 //!  @brief    Set CC3000 in mDNS advertiser mode in order to advertise itself.
 //
 //*****************************************************************************
 
-INT16 mdnsAdvertiser(UINT16 mdnsEnabled, const CHAR * deviceServiceName, UINT16 deviceServiceNameLength)
+INT16 mdnsAdvertiser(UINT16 mdnsEnabled, CHAR * deviceServiceName, UINT16 deviceServiceNameLength)
 {
 	INT8 ret;
 	UINT8 *pTxBuffer, *pArgs;
@@ -1179,7 +1170,273 @@ INT16 mdnsAdvertiser(UINT16 mdnsEnabled, const CHAR * deviceServiceName, UINT16 
 	return ret;
 
 }
+#else
+INT16 mdnsAdvertiser(UINT16 mdnsEnabled, CHAR * deviceServiceName, UINT16 deviceServiceNameLength)
+{
+    sockaddr tSocketAddr;
+    INT32 mdnsSocket = -1;
+    INT device_name_len;
+    CHAR mdnsResponse[220];
+    INT16 mdnsResponseLength;
+    CHAR *mdnsResponsePtr;
 
+    if(deviceServiceName != NULL)
+    {
+        device_name_len = strlen(deviceServiceName);
+    }
+    else
+    {
+        return EFAIL;
+    }
+
+    if (deviceServiceNameLength > MDNS_DEVICE_SERVICE_MAX_LENGTH)
+	{
+		return EFAIL;
+	}
+
+    mdnsSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if(mdnsSocket < 0)
+    {
+        return -1;
+    }
+
+    //Send mDNS data to 224.0.0.251
+    tSocketAddr.sa_family = AF_INET;
+
+    // the destination port 5353
+    tSocketAddr.sa_data[0] = 0x14;
+    tSocketAddr.sa_data[1] = 0xe9;
+
+    tSocketAddr.sa_data[2] = 0xe0;
+    tSocketAddr.sa_data[3] = 0x00;
+    tSocketAddr.sa_data[4] = 0x00;
+    tSocketAddr.sa_data[5] = 0xfb;
+
+	memset(mdnsResponse, 0, sizeof(mdnsResponse));
+	mdnsResponsePtr = mdnsResponse;
+
+	// mDNS header
+	mdnsResponse[2] = 0x84;	                       // DNS flags
+	mdnsResponse[7] = 0x5;	                       // number of answers
+	mdnsResponsePtr += 12;
+
+	// answer 1 - the device service name
+	*mdnsResponsePtr++ = 12;	                   // size of _device-info
+	memcpy(mdnsResponsePtr, "_device-info", 12);   // _device-info
+	mdnsResponsePtr += 12;
+	*mdnsResponsePtr++ = 4;	                       // size of _udp
+	memcpy(mdnsResponsePtr, "_udp", 4);	           // _udp
+	mdnsResponsePtr += 4;
+	*mdnsResponsePtr++ = 5;	                       // size of local
+	memcpy(mdnsResponsePtr, "local", 5);	       // local
+	mdnsResponsePtr += 7;
+	*mdnsResponsePtr = 0xc;	                       // PTR type
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr = 0x1;	                       // class IN
+	mdnsResponsePtr += 3;
+	*mdnsResponsePtr++ = 0x11;	                       // TTL = 4500 seconds
+	*mdnsResponsePtr = 0x94;	                       // TTL = 4500 seconds
+	mdnsResponsePtr += 4;	                           // domain and its length - filled during invoke of mDNS advertiser
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr++ = 0x0c;	                       // points to rest of the domain
+
+	// answer 2 - the device-info service
+	*mdnsResponsePtr++ = 9;	                           // size of _services
+	memcpy(mdnsResponsePtr, "_services", 9);	       // _services
+	mdnsResponsePtr += 9;
+	*mdnsResponsePtr++ = 7;	                           // size of _dns-sd
+	memcpy(mdnsResponsePtr, "_dns-sd", 7);	           // _dns-sd
+	mdnsResponsePtr += 7;
+	*mdnsResponsePtr++ = 4;	                           // size of _udp
+	memcpy(mdnsResponsePtr, "_udp", 4);	               // _udp
+	mdnsResponsePtr += 4;
+	*mdnsResponsePtr++ = 5;	                           // size of local
+	memcpy(mdnsResponsePtr, "local", 5);	           // local
+	mdnsResponsePtr += 7;
+	*mdnsResponsePtr = 0xc;	                           // PTR type
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr = 0x1;	                           // class IN
+	mdnsResponsePtr += 3;
+	*mdnsResponsePtr++ = 0x11;	                       // TTL = 4500 seconds
+	*mdnsResponsePtr = 0x94;	                       // TTL = 4500 seconds
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 2;	                           // size of PTR
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr++ = 0x0c;	                       // points to rest of the domain
+
+	// answer 3 - TXT record of the service
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr = 0x2f;	                       // points to device service name
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 0x10;	                       // TXT type
+	*mdnsResponsePtr++ = 0x80;	                       // class UNICAST
+	*mdnsResponsePtr = 0x1;	                           // class IN
+	mdnsResponsePtr += 3;
+	*mdnsResponsePtr++ = 0x11;	                       // TTL = 4500 seconds
+	*mdnsResponsePtr = 0x94;	                       // TTL = 4500 seconds
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 36;	                       // size of TXT
+	*mdnsResponsePtr++ = 10;	                       // size of dev=CC3000
+	memcpy(mdnsResponsePtr, "dev=CC3000", 10);	       // _device-info
+	mdnsResponsePtr += 10;
+	*mdnsResponsePtr++ = 24;	                       // size of vendor=Texas-Instruments
+	memcpy(mdnsResponsePtr, "vendor=Texas-Instruments", 24);	// _udp
+	mdnsResponsePtr += 24;
+
+	// answer 4 - SRV record of the service
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr = 0x2f;	                       // points to device service name
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 0x21;	                       // SRV type
+	*mdnsResponsePtr++ = 0x80;	                       // class UNICAST
+	*mdnsResponsePtr = 0x1;	                           // class IN
+	mdnsResponsePtr += 3;
+	*mdnsResponsePtr++ = 0x11;	                       // TTL = 4500 seconds
+	*mdnsResponsePtr = 0x94;	                       // TTL = 4500 seconds
+	mdnsResponsePtr += 2;
+
+	//data length to be filled later in hook_sl_cmd_parser function
+	mdnsResponsePtr += 5;
+	*mdnsResponsePtr++ = 0x4;	                       // high portion of port 1234
+	*mdnsResponsePtr++ = 0xd2;	                       // low portion of port 1234
+
+	//size should be according to device_name (input parameter from API)
+	mdnsResponsePtr += 1;                              //leave free slot for device_name length
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr++ = 0x1e;	                       // points to local
+
+	// answer 5 - ADDRESS record of the service
+	*mdnsResponsePtr++ = 0xc0;
+	*mdnsResponsePtr =
+	  (UINT16)(mdnsResponsePtr - mdnsResponse) - 4; //adding the required offset in hook_sl_cmd_parser function
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 0x1;	                       // Address type
+	*mdnsResponsePtr++ = 0x80;	                       // class UNICAST
+	*mdnsResponsePtr = 0x1;	                       // class IN
+	mdnsResponsePtr += 3;
+	*mdnsResponsePtr++ = 0x11;	                       // TTL = 4500 seconds
+	*mdnsResponsePtr = 0x94;	                       // TTL = 4500 seconds
+	mdnsResponsePtr += 2;
+	*mdnsResponsePtr++ = 4;	                       // size of Address
+
+	mdnsResponseLength = (UINT16)(mdnsResponsePtr - mdnsResponse);
+
+	//
+	// Move to the domain and its length
+	//
+	mdnsResponsePtr = &mdnsResponse[46];
+
+	//
+	// Domain length
+	//
+	*mdnsResponsePtr++ = 3 + device_name_len;
+
+	//
+	// Size of device service name
+	//
+	*mdnsResponsePtr++ = device_name_len;
+
+	//
+	// Now we need to insert the device service name here
+	// (so push the rest accordingly).
+	//
+	memmove(mdnsResponsePtr + device_name_len,
+			mdnsResponsePtr,
+			mdnsResponseLength - 48);
+
+	//
+	// Device service name.
+	//
+	memcpy(mdnsResponsePtr, deviceServiceName, device_name_len);
+
+	//
+	// Start handling Host Domain Name (Type = 1)
+	// DNS IE starts at constant offset: 62
+	// First answer starts at constant offset: 74
+	// Second answer starts at offset which depends on device_name length:
+	//     112 + device_name length
+
+	// Third answer starts at offset which depends on device_name length:
+	//     154 + device_name length
+
+	// Forth answer starts at offset which depends on device_name length:
+	//     202 + device_name length
+
+	// Fifth answer starts at offset which depends on device_name length
+	//     +SRV target: 223 + device_name length * 2 */
+
+	//
+	// Fill SRV Data Length -> Fourth answer,
+	// 10 bytes offset (Domain Name, Type, Class, TTL) + 1 byte (Fill LSB bits)
+	// => (202 + device_name length + 11) - 62 (base offset) = 151 +
+	// device_name length.
+	//
+	// Move to data length
+	//
+	mdnsResponsePtr = &mdnsResponse[151 + device_name_len];
+
+	//
+	//Data Length: Priority (2 bytes) + Weight (2 bytes) + Port (2 bytes) +
+	//Target size (1 byte) + 2 bytes (PTR + Offset of .local) = 9 bytes
+	//
+	*mdnsResponsePtr = 9 + device_name_len;
+
+	//
+	//Fill SRV Target -> 7 bytes offset from Data Length.
+	//Derived from: (Priority 2 bytes, Weight 2 bytes, Port 2 bytes)
+	//
+	mdnsResponsePtr =
+	  &mdnsResponse[158 + device_name_len];// Move to the domain and its length
+	*mdnsResponsePtr++ = device_name_len;  // Domain length
+
+	/*now we need to insert the device service name here
+	(so push the rest accordingly)*/
+	memmove(mdnsResponsePtr + device_name_len,
+			mdnsResponsePtr,
+			mdnsResponseLength - 158);
+	//
+	// Device service name
+	//
+	memcpy(mdnsResponsePtr,
+		   ((char *)deviceServiceName),
+		   device_name_len);
+	//
+	// Move to the end of the packet
+	//
+	mdnsResponsePtr =
+	  &mdnsResponse[mdnsResponseLength + device_name_len + device_name_len];
+
+	//
+	//End handling Host Domain Name (Type = 1)
+	//
+	*mdnsResponsePtr++ = localIP[3];
+	*mdnsResponsePtr++ = localIP[2];
+	*mdnsResponsePtr++ = localIP[1];
+	*mdnsResponsePtr++ = localIP[0];
+
+	//
+	// Add the length of the device name to the ADDRESS record
+	//
+	*(mdnsResponsePtr - 15) += device_name_len;
+
+	mdnsResponseLength = (UINT16)(mdnsResponsePtr - mdnsResponse);
+
+	//
+	// Send the mDNS response packet.
+	//
+	sendto(mdnsSocket,
+		   mdnsResponse,
+		   sizeof(mdnsResponse),
+		   0,
+		   (const sockaddr*)&tSocketAddr,
+		   mdnsResponseLength);
+
+    closesocket(mdnsSocket);
+    mdnsSocket = 0xFFFFFFFF;
+
+    return mdnsSocket;
+}
+#endif
 
 //*****************************************************************************
 //

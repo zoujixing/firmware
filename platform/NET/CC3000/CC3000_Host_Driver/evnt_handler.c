@@ -1,41 +1,37 @@
 /*****************************************************************************
- *
- *  evnt_handler.c  - CC3000 Host Driver Implementation.
- *  Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
- *
- *   feb-12-2014 V2.00  David Sidrane david_s5@usa.net see
- *   http://nscdg.com/spark/David_Sidrane's_rework_of_the_TI_CC3000_driver_for_Spark.pdf
- *   for details of rework
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *    Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the
- *    distribution.
- *
- *    Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- *****************************************************************************/
+*
+*  evnt_handler.c  - CC3000 Host Driver Implementation.
+*  Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+*
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted provided that the following conditions
+*  are met:
+*
+*    Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+*
+*    Redistributions in binary form must reproduce the above copyright
+*    notice, this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the   
+*    distribution.
+*
+*    Neither the name of Texas Instruments Incorporated nor the names of
+*    its contributors may be used to endorse or promote products derived
+*    from this software without specific prior written permission.
+*
+*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
+*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+*  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
+*  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+*  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+*  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+*  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+*****************************************************************************/
 //*****************************************************************************
 //
 //! \addtogroup evnt_handler_api
@@ -59,6 +55,8 @@
 #include "debug.h"
 #include "spark_macros.h"
 #include <stdatomic.h>
+
+
 
 //*****************************************************************************
 //                  COMMON DEFINES
@@ -124,6 +122,10 @@
 static volatile UINT32 socket_active_status = SOCKET_STATUS_INIT_VAL;
 uint32_t cc3000__event_timeout_ms = 0;
 
+#ifdef MDNS_ADVERTISE_HOST
+UINT8 localIP[NETAPP_IPCONFIG_IP_LENGTH];
+#endif
+
 //*****************************************************************************
 //            Prototypes for the static functions
 //*****************************************************************************
@@ -131,7 +133,6 @@ uint32_t cc3000__event_timeout_ms = 0;
 static INT32 hci_event_unsol_flowcontrol_handler(CHAR *pEvent);
 
 static void update_socket_active_status(CHAR *resp_params);
-
 
 //*****************************************************************************
 //
@@ -161,14 +162,14 @@ void hci_unsol_handle_patch_request(CHAR *event_hdr)
 			if (patch)
 			{
 				hci_patch_send(HCI_EVENT_PATCHES_DRV_REQ, 
-						tSLInformation.pucTxCommandBuffer, patch, ucLength);
+					tSLInformation.pucTxCommandBuffer, patch, ucLength);
 				return;
 			}
 		}
 
 		// Send 0 length Patches response event
 		hci_patch_send(HCI_EVENT_PATCHES_DRV_REQ, 
-				tSLInformation.pucTxCommandBuffer, 0, 0);
+			tSLInformation.pucTxCommandBuffer, 0, 0);
 		break;
 
 	case HCI_EVENT_PATCHES_FW_REQ:
@@ -181,14 +182,14 @@ void hci_unsol_handle_patch_request(CHAR *event_hdr)
 			if (patch)
 			{
 				hci_patch_send(HCI_EVENT_PATCHES_FW_REQ, 
-						tSLInformation.pucTxCommandBuffer, patch, ucLength);
+					tSLInformation.pucTxCommandBuffer, patch, ucLength);
 				return;
 			}
 		}
 
 		// Send 0 length Patches response event
 		hci_patch_send(HCI_EVENT_PATCHES_FW_REQ, 
-				tSLInformation.pucTxCommandBuffer, 0, 0);
+			tSLInformation.pucTxCommandBuffer, 0, 0);
 		break;
 
 	case HCI_EVENT_PATCHES_BOOTLOAD_REQ:
@@ -200,14 +201,14 @@ void hci_unsol_handle_patch_request(CHAR *event_hdr)
 			if (patch)
 			{
 				hci_patch_send(HCI_EVENT_PATCHES_BOOTLOAD_REQ,  
-						tSLInformation.pucTxCommandBuffer, patch, ucLength);
+					tSLInformation.pucTxCommandBuffer, patch, ucLength);
 				return;
 			}
 		}
 
 		// Send 0 length Patches response event
 		hci_patch_send(HCI_EVENT_PATCHES_BOOTLOAD_REQ, 
-				tSLInformation.pucTxCommandBuffer, 0, 0);
+			tSLInformation.pucTxCommandBuffer, 0, 0);
 		break;
 	}
 }
@@ -240,102 +241,10 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 	UINT8 * RecvParams;
 	UINT8 *RetParams;
 
-	volatile system_tick_t start = GetSystem1MsTick();
 
 	while (1)
 	{
-		if (tSLInformation.usEventOrDataReceived == 0)
-		{
-			KICK_WDT();
-			volatile system_tick_t now = GetSystem1MsTick();
-			volatile long elapsed = now - start;
-			if (elapsed < 0) { // Did we wrap
-				elapsed = start + now; // yes now
-			}
-
-			if (cc3000__event_timeout_ms && (elapsed >= cc3000__event_timeout_ms))
-			{
-				ERROR("Timeout now %ld start %ld elapsed %ld cc3000__event_timeout_ms %ld",now,start,elapsed,cc3000__event_timeout_ms);
-				ERROR("Timeout waiting on tSLInformation.usRxEventOpcode 0x%04x",tSLInformation.usRxEventOpcode);
-
-				// Timeout Return Error for requested Opcode
-				// This sucks because callers should have initialized pucReceivedParams
-				switch(tSLInformation.usRxEventOpcode)
-				{
-
-				default:
-					INVALID_CASE(tSLInformation.usRxEventOpcode);
-					break;
-
-				case HCI_CMND_SIMPLE_LINK_START:
-				case HCI_CMND_READ_BUFFER_SIZE:
-					break;
-
-				case HCI_CMND_WLAN_CONFIGURE_PATCH:
-				case HCI_NETAPP_DHCP:
-				case HCI_NETAPP_PING_SEND:
-				case HCI_NETAPP_PING_STOP:
-				case HCI_NETAPP_ARP_FLUSH:
-				case HCI_NETAPP_SET_DEBUG_LEVEL:
-				case HCI_NETAPP_SET_TIMERS:
-				case HCI_EVNT_NVMEM_READ:
-				case HCI_EVNT_NVMEM_CREATE_ENTRY:
-				case HCI_CMND_NVMEM_WRITE_PATCH:
-				case HCI_NETAPP_PING_REPORT:
-				case HCI_EVNT_MDNS_ADVERTISE:
-				case HCI_EVNT_READ_SP_VERSION:
-				case HCI_EVNT_SELECT:
-					*(UINT8 *)pRetParams = -1;
-					break;
-
-				case HCI_CMND_SETSOCKOPT:
-				case HCI_CMND_WLAN_CONNECT:
-				case HCI_CMND_WLAN_IOCTL_STATUSGET:
-				case HCI_EVNT_WLAN_IOCTL_ADD_PROFILE:
-				case HCI_CMND_WLAN_IOCTL_DEL_PROFILE:
-				case HCI_CMND_WLAN_IOCTL_SET_CONNECTION_POLICY:
-				case HCI_CMND_WLAN_IOCTL_SET_SCANPARAM:
-				case HCI_CMND_WLAN_IOCTL_SIMPLE_CONFIG_START:
-				case HCI_CMND_WLAN_IOCTL_SIMPLE_CONFIG_STOP:
-				case HCI_CMND_WLAN_IOCTL_SIMPLE_CONFIG_SET_PREFIX:
-				case HCI_CMND_EVENT_MASK:
-				case HCI_EVNT_WLAN_DISCONNECT:
-				case HCI_EVNT_SOCKET:
-				case HCI_EVNT_BIND:
-				case HCI_CMND_LISTEN:
-				case HCI_EVNT_CLOSE_SOCKET:
-				case HCI_EVNT_CONNECT:
-				case HCI_EVNT_NVMEM_WRITE:
-				case HCI_EVNT_BSD_GETHOSTBYNAME:
-					*(INT32 *)pRetParams = -1;
-					break;
-
-
-				case HCI_EVNT_RECV:
-				case HCI_EVNT_RECVFROM:
-				case HCI_EVNT_ACCEPT:
-				case HCI_EVNT_SEND:
-				case HCI_EVNT_SENDTO:
-				case HCI_CMND_GETSOCKOPT:
-					*(INT32 *)pRetParams = -1;
-					pRetParams += sizeof(INT32);
-					*(INT32 *)pRetParams = -1;
-					break;
-
-				case HCI_CMND_WLAN_IOCTL_GET_SCAN_RESULTS:
-					*(INT32 *)pRetParams = 0;
-					break;
-
-
-				case HCI_NETAPP_IPCONFIG:
-					memset(pRetParams,0,sizeof(tNetappIpconfigRetArgs));
-					break;
-				}
-				break; // Exit Loop
-			}
-
-		}
-		else
+		if (tSLInformation.usEventOrDataReceived != 0)
 		{				
 			pucReceivedData = (tSLInformation.pucReceivedData);
 
@@ -343,7 +252,7 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 			{
 				// Event Received
 				STREAM_TO_UINT16((CHAR *)pucReceivedData, HCI_EVENT_OPCODE_OFFSET,
-						usReceivedEventOpcode);
+					usReceivedEventOpcode);
 				pucReceivedParams = pucReceivedData + HCI_EVENT_HEADER_SIZE;		
 				RecvParams = pucReceivedParams;
 				RetParams = pRetParams;
@@ -356,13 +265,13 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 					switch(usReceivedEventOpcode)
 					{		
 					case HCI_CMND_READ_BUFFER_SIZE:
-					{
-						STREAM_TO_UINT8((CHAR *)pucReceivedParams, 0,
+						{
+							STREAM_TO_UINT8((CHAR *)pucReceivedParams, 0, 
 								tSLInformation.usNumberOfFreeBuffers);
-						STREAM_TO_UINT16((CHAR *)pucReceivedParams, 1,
+							STREAM_TO_UINT16((CHAR *)pucReceivedParams, 1, 
 								tSLInformation.usSlBufferLength);
-					}
-					break;
+						}
+						break;
 
 					case HCI_CMND_WLAN_CONFIGURE_PATCH:
 					case HCI_NETAPP_DHCP:
@@ -378,7 +287,7 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 					case HCI_EVNT_MDNS_ADVERTISE:
 
 						STREAM_TO_UINT8(pucReceivedData, HCI_EVENT_STATUS_OFFSET
-								,*(UINT8 *)pRetParams);
+							,*(UINT8 *)pRetParams);
 						break;
 
 					case HCI_CMND_SETSOCKOPT:
@@ -401,13 +310,13 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 					case HCI_EVNT_NVMEM_WRITE:
 
 						STREAM_TO_UINT32((CHAR *)pucReceivedParams,0
-								,*(UINT32 *)pRetParams);
+							,*(UINT32 *)pRetParams);
 						break;
 
 					case HCI_EVNT_READ_SP_VERSION:
 
 						STREAM_TO_UINT8(pucReceivedData, HCI_EVENT_STATUS_OFFSET
-								,*(UINT8 *)pRetParams);
+							,*(UINT8 *)pRetParams);
 						pRetParams = ((CHAR *)pRetParams) + 1;
 						STREAM_TO_UINT32((CHAR *)pucReceivedParams, 0, retValue32);
 						UINT32_TO_STREAM((UINT8 *)pRetParams, retValue32);				
@@ -416,72 +325,72 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 					case HCI_EVNT_BSD_GETHOSTBYNAME:
 
 						STREAM_TO_UINT32((CHAR *)pucReceivedParams
-								,GET_HOST_BY_NAME_RETVAL_OFFSET,*(UINT32 *)pRetParams);
+							,GET_HOST_BY_NAME_RETVAL_OFFSET,*(UINT32 *)pRetParams);
 						pRetParams = ((CHAR *)pRetParams) + 4;
 						STREAM_TO_UINT32((CHAR *)pucReceivedParams
-								,GET_HOST_BY_NAME_ADDR_OFFSET,*(UINT32 *)pRetParams);
+							,GET_HOST_BY_NAME_ADDR_OFFSET,*(UINT32 *)pRetParams);					
 						break;
 
 					case HCI_EVNT_GETMSSVALUE:
 
 						STREAM_TO_UINT16((CHAR *)pucReceivedParams
-								,GET_MSS_VAL_RETVAL_OFFSET,*(UINT16 *)pRetParams);
+							,GET_MSS_VAL_RETVAL_OFFSET,*(UINT16 *)pRetParams);					
 
 						break;
 
 					case HCI_EVNT_ACCEPT:
-					{
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,ACCEPT_SD_OFFSET
+						{
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,ACCEPT_SD_OFFSET
 								,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams
 								,ACCEPT_RETURN_STATUS_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
+							pRetParams = ((CHAR *)pRetParams) + 4; 
 
-						//This argument returns in network order
-						memcpy((UINT8 *)pRetParams,
+							//This argument returns in network order
+							memcpy((UINT8 *)pRetParams, 
 								pucReceivedParams + ACCEPT_ADDRESS__OFFSET, sizeof(sockaddr));	
-						break;
-					}
+							break;
+						}
 
 					case HCI_EVNT_RECV:
 					case HCI_EVNT_RECVFROM:
-					{
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_SD_OFFSET ,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_NUM_BYTES_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE__FLAGS__OFFSET,*(UINT32 *)pRetParams);
-
-						if(((tBsdReadReturnParams *)pRetParams)->iNumberOfBytes == ERROR_SOCKET_INACTIVE)
 						{
-							set_socket_active_status(((tBsdReadReturnParams *)pRetParams)->iSocketDescriptor,SOCKET_STATUS_INACTIVE);
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_SD_OFFSET ,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_NUM_BYTES_OFFSET,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE__FLAGS__OFFSET,*(UINT32 *)pRetParams);
+
+							if(((tBsdReadReturnParams *)pRetParams)->iNumberOfBytes == ERROR_SOCKET_INACTIVE)
+							{
+								set_socket_active_status(((tBsdReadReturnParams *)pRetParams)->iSocketDescriptor,SOCKET_STATUS_INACTIVE);
+							}
+							break;
 						}
-						break;
-					}
 
 					case HCI_EVNT_SEND:
 					case HCI_EVNT_SENDTO:
-					{
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_SD_OFFSET ,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_NUM_BYTES_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
+						{
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_SD_OFFSET ,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SL_RECEIVE_NUM_BYTES_OFFSET,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
 
-						break;
-					}
+							break;
+						}
 
 					case HCI_EVNT_SELECT:
-					{
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_STATUS_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_READFD_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_WRITEFD_OFFSET,*(UINT32 *)pRetParams);
-						pRetParams = ((CHAR *)pRetParams) + 4;
-						STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_EXFD_OFFSET,*(UINT32 *)pRetParams);
-						break;
-					}
+						{ 
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_STATUS_OFFSET,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_READFD_OFFSET,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_WRITEFD_OFFSET,*(UINT32 *)pRetParams);
+							pRetParams = ((CHAR *)pRetParams) + 4;
+							STREAM_TO_UINT32((CHAR *)pucReceivedParams,SELECT_EXFD_OFFSET,*(UINT32 *)pRetParams);			
+							break;
+						}
 
 					case HCI_CMND_GETSOCKOPT:
 
@@ -541,55 +450,27 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 				if (usReceivedEventOpcode == tSLInformation.usRxEventOpcode)
 				{
 					tSLInformation.usRxEventOpcode = 0;
-					tSLInformation.solicitedResponse = 0;
 				}
 			}
 			else
-			{
-				if (tSLInformation.usRxDataPending == 0)
+			{				
+				pucReceivedParams = pucReceivedData;
+				STREAM_TO_UINT8((CHAR *)pucReceivedData, HCI_PACKET_ARGSIZE_OFFSET, ucArgsize);
+
+				STREAM_TO_UINT16((CHAR *)pucReceivedData, HCI_PACKET_LENGTH_OFFSET, usLength);
+
+				// Data received: note that the only case where from and from length 
+				// are not null is in recv from, so fill the args accordingly
+				if (from)
 				{
-					ERROR("type != HCI_TYPE_EVNT is (%d) usRxDataPending=%d usRxEventOpcode=%u usReceivedEventOpcode=%u",
-							*pucReceivedData,
-							tSLInformation.usRxDataPending,
-							tSLInformation.usRxEventOpcode,
-							usReceivedEventOpcode);
+					STREAM_TO_UINT32((CHAR *)(pucReceivedData + HCI_DATA_HEADER_SIZE), BSD_RECV_FROM_FROMLEN_OFFSET, *(UINT32 *)fromlen);
+					memcpy(from, (pucReceivedData + HCI_DATA_HEADER_SIZE + BSD_RECV_FROM_FROM_OFFSET) ,*fromlen);
 				}
-				else
-				{
-					pucReceivedParams = pucReceivedData;
-					STREAM_TO_UINT8((CHAR *)pucReceivedData, HCI_PACKET_ARGSIZE_OFFSET, ucArgsize);
 
-					STREAM_TO_UINT16((CHAR *)pucReceivedData, HCI_PACKET_LENGTH_OFFSET, usLength);
+				memcpy(pRetParams, pucReceivedParams + HCI_DATA_HEADER_SIZE + ucArgsize,
+					usLength - ucArgsize);
 
-					// Data received: note that the only case where from and from length
-					// are not null is in recv from, so fill the args accordingly
-					if (from)
-					{
-						STREAM_TO_UINT32((CHAR *)(pucReceivedData + HCI_DATA_HEADER_SIZE), BSD_RECV_FROM_FROMLEN_OFFSET, *(UINT32 *)fromlen);
-						memcpy(from, (pucReceivedData + HCI_DATA_HEADER_SIZE + BSD_RECV_FROM_FROM_OFFSET) ,*fromlen);
-					}
-
-					// Let's vet length
-					long length = usLength - ucArgsize;
-
-					if (length <= 0 || length > arraySize(wlan_rx_buffer))
-					{
-						// Not sane
-						length = -1;
-					}
-					else
-					{
-						memcpy(pRetParams, pucReceivedParams + HCI_DATA_HEADER_SIZE + ucArgsize, length);
-					}
-
-					// fixes the Nvram read not returning length
-					if (fromlen)
-					{
-						*fromlen = length;
-					}
-
-					tSLInformation.usRxDataPending = 0;
-				}
+				tSLInformation.usRxDataPending = 0;
 			}
 
 			tSLInformation.usEventOrDataReceived = 0;
@@ -599,7 +480,7 @@ UINT8 * hci_event_handler(void *pRetParams, UINT8 *from, INT32 *fromlen)
 			// Since we are going to TX - we need to handle this event after the 
 			// ResumeSPi since we need interrupts
 			if ((*pucReceivedData == HCI_TYPE_EVNT) &&
-					(usReceivedEventOpcode == HCI_EVNT_PATCHES_REQ))
+				(usReceivedEventOpcode == HCI_EVNT_PATCHES_REQ))
 			{
 				hci_unsol_handle_patch_request((CHAR *)pucReceivedData);
 			}
@@ -641,22 +522,22 @@ INT32 hci_unsol_event_handler(CHAR *event_hdr)
 		{
 
 		case HCI_EVNT_DATA_UNSOL_FREE_BUFF:
-		{
-			hci_event_unsol_flowcontrol_handler(event_hdr);
-
-			NumberOfReleasedPackets = tSLInformation.NumberOfReleasedPackets;
-			NumberOfSentPackets = tSLInformation.NumberOfSentPackets;
-
-			if (NumberOfReleasedPackets == NumberOfSentPackets)
 			{
-				if (tSLInformation.InformHostOnTxComplete)
-				{
-					tSLInformation.sWlanCB(HCI_EVENT_CC3000_CAN_SHUT_DOWN, NULL, 0);
-				}
-			}
-			return 1;
+				hci_event_unsol_flowcontrol_handler(event_hdr);
 
-		}
+				NumberOfReleasedPackets = tSLInformation.NumberOfReleasedPackets;
+				NumberOfSentPackets = tSLInformation.NumberOfSentPackets;
+
+				if (NumberOfReleasedPackets == NumberOfSentPackets)
+				{
+					if (tSLInformation.InformHostOnTxComplete)
+					{
+						tSLInformation.sWlanCB(HCI_EVENT_CC3000_CAN_SHUT_DOWN, NULL, 0);
+					}
+				}				
+				return 1;
+
+			}
 		}
 	}
 
@@ -677,67 +558,82 @@ INT32 hci_unsol_event_handler(CHAR *event_hdr)
 			break;
 
 		case HCI_EVNT_WLAN_UNSOL_DHCP:
-		{
-			UINT8	params[NETAPP_IPCONFIG_MAC_OFFSET + 1];	// extra byte is for the status
-			UINT8 *recParams = params;
-
-			data = (CHAR*)(event_hdr) + HCI_EVENT_HEADER_SIZE;
-
-			//Read IP address
-			STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
-			data += 4;
-			//Read subnet
-			STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
-			data += 4;
-			//Read default GW
-			STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
-			data += 4;
-			//Read DHCP server
-			STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
-			data += 4;
-			//Read DNS server
-			STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
-			// read the status
-			STREAM_TO_UINT8(event_hdr, HCI_EVENT_STATUS_OFFSET, *recParams);
-
-
-			if( tSLInformation.sWlanCB )
 			{
-				tSLInformation.sWlanCB(event_type, (CHAR *)params, sizeof(params));
+				UINT8	params[NETAPP_IPCONFIG_MAC_OFFSET + 1];	// extra byte is for the status
+				UINT8 *recParams = params;
+
+				data = (CHAR*)(event_hdr) + HCI_EVENT_HEADER_SIZE;
+
+				//Read IP address
+				STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
+				data += 4;
+
+#ifdef MDNS_ADVERTISE_HOST
+				localIP[0] = *(recParams-NETAPP_IPCONFIG_IP_LENGTH);
+				localIP[1] = *(recParams-NETAPP_IPCONFIG_IP_LENGTH + 1);
+				localIP[2] = *(recParams-NETAPP_IPCONFIG_IP_LENGTH + 2);
+				localIP[3] = *(recParams-NETAPP_IPCONFIG_IP_LENGTH + 3);
+#endif
+				//Read subnet
+				STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);
+				data += 4;
+				//Read default GW
+				STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH); 
+				data += 4;
+				//Read DHCP server  
+				STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH);     
+				data += 4;
+				//Read DNS server  
+				STREAM_TO_STREAM(data,recParams,NETAPP_IPCONFIG_IP_LENGTH); 
+				// read the status
+				STREAM_TO_UINT8(event_hdr, HCI_EVENT_STATUS_OFFSET, *recParams);
+
+
+				if( tSLInformation.sWlanCB )
+				{
+					tSLInformation.sWlanCB(event_type, (CHAR *)params, sizeof(params));
+				}
 			}
-		}
-		break;
+			break;
 
 		case HCI_EVNT_WLAN_ASYNC_PING_REPORT:
-		{
-			netapp_pingreport_args_t params;
-			data = (CHAR*)(event_hdr) + HCI_EVENT_HEADER_SIZE;
-			STREAM_TO_UINT32(data, NETAPP_PING_PACKETS_SENT_OFFSET, params.packets_sent);
-			STREAM_TO_UINT32(data, NETAPP_PING_PACKETS_RCVD_OFFSET, params.packets_received);
-			STREAM_TO_UINT32(data, NETAPP_PING_MIN_RTT_OFFSET, params.min_round_time);
-			STREAM_TO_UINT32(data, NETAPP_PING_MAX_RTT_OFFSET, params.max_round_time);
-			STREAM_TO_UINT32(data, NETAPP_PING_AVG_RTT_OFFSET, params.avg_round_time);
-
-			if( tSLInformation.sWlanCB )
 			{
-				tSLInformation.sWlanCB(event_type, (CHAR *)&params, sizeof(params));
+				netapp_pingreport_args_t params;			
+				data = (CHAR*)(event_hdr) + HCI_EVENT_HEADER_SIZE;			
+				STREAM_TO_UINT32(data, NETAPP_PING_PACKETS_SENT_OFFSET, params.packets_sent);			
+				STREAM_TO_UINT32(data, NETAPP_PING_PACKETS_RCVD_OFFSET, params.packets_received);			
+				STREAM_TO_UINT32(data, NETAPP_PING_MIN_RTT_OFFSET, params.min_round_time);		
+				STREAM_TO_UINT32(data, NETAPP_PING_MAX_RTT_OFFSET, params.max_round_time);	
+				STREAM_TO_UINT32(data, NETAPP_PING_AVG_RTT_OFFSET, params.avg_round_time);
+
+				if( tSLInformation.sWlanCB )
+				{
+					tSLInformation.sWlanCB(event_type, (CHAR *)&params, sizeof(params));
+				}
 			}
-		}
-		break;
+			break;
 		case HCI_EVNT_BSD_TCP_CLOSE_WAIT:
-		{
-			data = (CHAR *)(event_hdr) + HCI_EVENT_HEADER_SIZE;
-			if( tSLInformation.sWlanCB )
 			{
-				//data[0] represents the socket id, for which FIN was received by remote.
-				//Upon receiving this event, the user can close the socket, or else the
-				//socket will be closded after inacvitity timeout (by default 60 seconds)
-				tSLInformation.sWlanCB(event_type, data, 1);
+				data = (CHAR *)(event_hdr) + HCI_EVENT_HEADER_SIZE;
+				if( tSLInformation.sWlanCB )
+				{
+					//data[0] represents the socket id, for which FIN was received by remote.
+					//Upon receiving this event, the user can close the socket, or else the 
+					//socket will be closded after inacvitity timeout (by default 60 seconds)
+					tSLInformation.sWlanCB(event_type, data, 1);
+				}
 			}
-		}
-		break;
+            break;
+            
+        case HCI_EVNT_ASYNC_ARP_DONE:
+        case HCI_EVNT_ASYNC_ARP_WAITING:
+        	if( tSLInformation.sWlanCB )
+			{
+				tSLInformation.sWlanCB(event_type, 0, 0);
+			}
+            break;
 
-		//'default' case which means "event not supported"
+			//'default' case which means "event not supported" 	
 		default: 
 			return (0);
 		}
@@ -745,7 +641,7 @@ INT32 hci_unsol_event_handler(CHAR *event_hdr)
 	}
 
 	if ((event_type == HCI_EVNT_SEND) || (event_type == HCI_EVNT_SENDTO)
-			|| (event_type == HCI_EVNT_WRITE))
+		|| (event_type == HCI_EVNT_WRITE))
 	{
 		CHAR *pArg;
 		INT32 status;
@@ -791,33 +687,29 @@ INT32 hci_unsol_event_handler(CHAR *event_hdr)
 INT32 hci_unsolicited_event_handler(void)
 {
 	UINT32   res = 0;
-	INT32 isEvent = 0;
 	UINT8 *pucReceivedData;
 
-	// Buffer has message in it
 	if (tSLInformation.usEventOrDataReceived != 0)
 	{
 		pucReceivedData = (tSLInformation.pucReceivedData);
-		isEvent = (*pucReceivedData == HCI_TYPE_EVNT);
-		// An event did hci_unsol_event_handler handle it?
-		res = isEvent && hci_unsol_event_handler((char *)pucReceivedData);
+
+		if (*pucReceivedData == HCI_TYPE_EVNT)
+		{			
+
+			// In case unsolicited event received - here the handling finished
+			if (hci_unsol_event_handler((CHAR *)pucReceivedData) == 1)
+			{
+
+				// There was an unsolicited event received - we can release the buffer
+				// and clean the event received 
+				tSLInformation.usEventOrDataReceived = 0;
+
+				res = 1;
+				SpiResumeSpi();
+			}
+		}
 	}
 
-	// Handled here Or if not there is no outstanding write (solicitedResponse)
-	if (res || (isEvent && tSLInformation.solicitedResponse == 0) ) {
-		// There was an unsolicited event received - we can release the buffer
-		// and clean the event received
-		if (!res)
-		{
-			ERROR("isEvent w/Opcode ==0  0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
-					pucReceivedData[0],pucReceivedData[1],pucReceivedData[2],pucReceivedData[3],
-					pucReceivedData[4],pucReceivedData[5],pucReceivedData[6],pucReceivedData[7],
-					pucReceivedData[8],pucReceivedData[9]);
-		}
-		tSLInformation.usEventOrDataReceived = 0;
-		// Fire it up again
-		SpiResumeSpi();
-	}
 	return res;
 }
 
@@ -849,6 +741,7 @@ void set_socket_active_status(INT32 Sd, INT32 Status)
 	}
 }
 
+
 //*****************************************************************************
 //
 //!  hci_event_unsol_flowcontrol_handler
@@ -872,7 +765,7 @@ INT32 hci_event_unsol_flowcontrol_handler(CHAR *pEvent)
 
 	STREAM_TO_UINT16((CHAR *)pEvent,HCI_EVENT_HEADER_SIZE,pusNumberOfHandles);
 	pReadPayload = ((CHAR *)pEvent +
-			HCI_EVENT_HEADER_SIZE + sizeof(pusNumberOfHandles));
+		HCI_EVENT_HEADER_SIZE + sizeof(pusNumberOfHandles));	
 	temp = 0;
 
 	for(i = 0; i < pusNumberOfHandles ; i++)

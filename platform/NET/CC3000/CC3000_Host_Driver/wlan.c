@@ -39,6 +39,7 @@
 //! @{
 //
 //*****************************************************************************
+#include <string.h>
 #include "wlan.h"
 #include "hci.h"
 #include "spi.h"
@@ -46,7 +47,6 @@
 #include "nvmem.h"
 #include "security.h"
 #include "evnt_handler.h"
-#include <string.h>
 
 
 volatile sSimplLinkInformation tSLInformation;
@@ -199,8 +199,7 @@ void wlan_init(		tWlanCB	 	sWlanCB,
 	tSLInformation.sWlanCB= sWlanCB;
 
 	// By default TX Complete events are routed to host too
-	tSLInformation.InformHostOnTxComplete = 1;
-	tSLInformation.solicitedResponse = 0;    // Assume not a send command
+	tSLInformation.InformHostOnTxComplete = 1;	
 }
 
 //*****************************************************************************
@@ -256,6 +255,8 @@ void SpiReceiveHandler(void *pvBuffer)
 void wlan_start(UINT16 usPatchesAvailableAtHost)
 {
 
+	UINT32 ulSpiIRQState;
+
 	tSLInformation.NumberOfSentPackets = 0;
 	tSLInformation.NumberOfReleasedPackets = 0;
 	tSLInformation.usRxEventOpcode = 0;
@@ -272,6 +273,31 @@ void wlan_start(UINT16 usPatchesAvailableAtHost)
 
 	// init spi
 	SpiOpen(SpiReceiveHandler);
+
+	// Check the IRQ line
+	ulSpiIRQState = tSLInformation.ReadWlanInterruptPin();
+
+	// Chip enable: toggle WLAN EN line
+	tSLInformation.WriteWlanPin( WLAN_ENABLE );
+
+	if (ulSpiIRQState)
+	{
+		// wait till the IRQ line goes low
+		while(tSLInformation.ReadWlanInterruptPin() != 0)
+		{
+		}
+	}
+	else
+	{
+		// wait till the IRQ line goes high and than low
+		while(tSLInformation.ReadWlanInterruptPin() == 0)
+		{
+		}
+
+		while(tSLInformation.ReadWlanInterruptPin() != 0)
+		{
+		}
+	}
 
 	SimpleLink_Init_Start(usPatchesAvailableAtHost);
 

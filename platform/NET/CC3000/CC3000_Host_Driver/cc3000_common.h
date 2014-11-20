@@ -36,6 +36,7 @@
 #define __COMMON_H__
 
 #include "data_types.h"
+#include "error_codes.h"
 
 //******************************************************************************
 // Include files
@@ -64,8 +65,6 @@ extern "C" {
 //*****************************************************************************
 //                  COMMON DEFINES
 //*****************************************************************************
-#define ERROR_SOCKET_INACTIVE   -57 
-
 #define WLAN_ENABLE      (1)   
 #define WLAN_DISABLE     (0)
 
@@ -105,7 +104,7 @@ extern "C" {
 */
 
 #define CC3000_MINIMAL_RX_SIZE      (130 + 1)
-#define CC3000_MAXIMAL_RX_SIZE      (1519 + 1)
+#define CC3000_MAXIMAL_RX_SIZE      (511 + 1)
 
 /*Defines for minimal and maximal TX buffer size.
   This buffer is used for sending events and data.
@@ -126,8 +125,8 @@ extern "C" {
  
   The 1 is used for the overrun detection */ 
 
-#define	CC3000_MINIMAL_TX_SIZE      (130 + 1)  
-#define	CC3000_MAXIMAL_TX_SIZE      (1519 + 1)
+#define	CC3000_MINIMAL_TX_SIZE      (130 + 1)
+#define	CC3000_MAXIMAL_TX_SIZE      (511 + 1)
 
 //TX and RX buffer sizes, allow to receive and transmit maximum data at length 8.
 #ifdef CC3000_TINY_DRIVER
@@ -146,8 +145,13 @@ extern "C" {
   
 #ifndef CC3000_TINY_DRIVER
   
-	#define CC3000_RX_BUFFER_SIZE   (CC3000_MINIMAL_RX_SIZE)
-	#define CC3000_TX_BUFFER_SIZE   (CC3000_MINIMAL_TX_SIZE)
+#ifdef MDNS_ADVERTISE_HOST
+    #define CC3000_RX_BUFFER_SIZE   (CC3000_MAXIMAL_RX_SIZE)
+    #define CC3000_TX_BUFFER_SIZE   (CC3000_MAXIMAL_TX_SIZE)
+#else
+    #define CC3000_RX_BUFFER_SIZE   (CC3000_MINIMAL_RX_SIZE)
+    #define CC3000_TX_BUFFER_SIZE   (CC3000_MINIMAL_TX_SIZE)
+#endif
   
 //if defined TINY DRIVER we use smaller RX and TX buffer in order to minimize RAM consumption
 #else
@@ -213,7 +217,6 @@ typedef struct
 	UINT32    NumberOfReleasedPackets;
 
 	UINT8	 InformHostOnTxComplete;
-	UINT8    solicitedResponse;
 }sSimplLinkInformation;
 
 extern volatile sSimplLinkInformation tSLInformation;

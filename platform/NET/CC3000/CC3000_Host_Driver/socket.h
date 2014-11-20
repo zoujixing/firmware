@@ -227,7 +227,7 @@ typedef struct
 //!          application layer to obtain a socket handle.
 //
 //*****************************************************************************
-extern INT16 socket(INT32 domain, INT32 type, INT32 protocol);
+extern INT32 socket(INT32 domain, INT32 type, INT32 protocol);
 
 //*****************************************************************************
 //
@@ -650,7 +650,7 @@ extern INT16 sendto(INT32 sd, const void *buf, INT32 len, INT32 flags,
 //!  @brief    Set CC3000 in mDNS advertiser mode in order to advertise itself.
 //
 //*****************************************************************************
-extern INT16 mdnsAdvertiser(UINT16 mdnsEnabled, const CHAR * deviceServiceName, UINT16 deviceServiceNameLength);
+extern INT16 mdnsAdvertiser(UINT16 mdnsEnabled, CHAR * deviceServiceName, UINT16 deviceServiceNameLength);
 
 
 //*****************************************************************************
