@@ -255,7 +255,7 @@ void SpiReceiveHandler(void *pvBuffer)
 void wlan_start(UINT16 usPatchesAvailableAtHost)
 {
 
-	UINT32 ulSpiIRQState;
+	//UINT32 ulSpiIRQState;
 
 	tSLInformation.NumberOfSentPackets = 0;
 	tSLInformation.NumberOfReleasedPackets = 0;
@@ -274,12 +274,13 @@ void wlan_start(UINT16 usPatchesAvailableAtHost)
 	// init spi
 	SpiOpen(SpiReceiveHandler);
 
-	// Check the IRQ line
+/*	// Check the IRQ line
 	ulSpiIRQState = tSLInformation.ReadWlanInterruptPin();
 
 	// Chip enable: toggle WLAN EN line
 	tSLInformation.WriteWlanPin( WLAN_ENABLE );
 
+ * mdma - removed since this causes the system to hang. ulSpiIRQState is 0 and the interrupt pin is never toggled.
 	if (ulSpiIRQState)
 	{
 		// wait till the IRQ line goes low
@@ -298,7 +299,7 @@ void wlan_start(UINT16 usPatchesAvailableAtHost)
 		{
 		}
 	}
-
+*/
 	SimpleLink_Init_Start(usPatchesAvailableAtHost);
 
 	// Read Buffer's size and finish
