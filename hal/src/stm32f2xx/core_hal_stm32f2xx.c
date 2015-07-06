@@ -150,7 +150,7 @@ extern __IO uint16_t BUTTON_DEBOUNCED_TIME[];
  *******************************************************************************/
 void HAL_Core_Config(void)
 {
-    DECLARE_SYS_HEALTH(ENTERED_SparkCoreConfig);
+    // DECLARE_SYS_HEALTH(ENTERED_SparkCoreConfig);
 
 #ifdef DFU_BUILD_ENABLE
     //Currently this is done through WICED library API so commented.
@@ -161,16 +161,16 @@ void HAL_Core_Config(void)
     Set_System();
 
     //Wiring pins default to inputs
-#if !defined(USE_SWD_JTAG) && !defined(USE_SWD)
-    for (pin_t pin=0; pin<20; pin++)
-        HAL_Pin_Mode(pin, INPUT);
-#endif
+// #if !defined(USE_SWD_JTAG) && !defined(USE_SWD)
+//     for (pin_t pin=0; pin<20; pin++)
+//         HAL_Pin_Mode(pin, INPUT);
+// #endif
 
     SysTick_Configuration();
 
-    HAL_RTC_Configuration();
+    // HAL_RTC_Configuration();
 
-    HAL_RNG_Configuration();
+    // HAL_RNG_Configuration();
 
 #ifdef DFU_BUILD_ENABLE
     Load_SystemFlags();
@@ -189,14 +189,14 @@ void HAL_Core_Config(void)
     FLASH_WriteProtectMemory(FLASH_INTERNAL, CORE_FW_ADDRESS, USER_FIRMWARE_IMAGE_LOCATION - CORE_FW_ADDRESS, true);
 #endif
 
-#ifdef USE_SERIAL_FLASH
-    //Initialize Serial Flash
-    sFLASH_Init();
-#else
-    FLASH_AddToFactoryResetModuleSlot(FLASH_INTERNAL, INTERNAL_FLASH_FAC_ADDRESS,
-                                      FLASH_INTERNAL, USER_FIRMWARE_IMAGE_LOCATION, FIRMWARE_IMAGE_SIZE,
-                                      FACTORY_RESET_MODULE_FUNCTION, MODULE_VERIFY_CRC|MODULE_VERIFY_FUNCTION|MODULE_VERIFY_DESTINATION_IS_START_ADDRESS); //true to verify the CRC during copy also
-#endif
+// #ifdef USE_SERIAL_FLASH
+//     //Initialize Serial Flash
+//     sFLASH_Init();
+// #else
+//     FLASH_AddToFactoryResetModuleSlot(FLASH_INTERNAL, INTERNAL_FLASH_FAC_ADDRESS,
+//                                       FLASH_INTERNAL, USER_FIRMWARE_IMAGE_LOCATION, FIRMWARE_IMAGE_SIZE,
+//                                       FACTORY_RESET_MODULE_FUNCTION, MODULE_VERIFY_CRC|MODULE_VERIFY_FUNCTION|MODULE_VERIFY_DESTINATION_IS_START_ADDRESS); //true to verify the CRC during copy also
+// #endif
 
 
 }
@@ -212,7 +212,7 @@ void HAL_Core_Setup(void) {
 
     HAL_Core_Setup_finalize();
 
-    bootloader_update_if_needed();
+    //bootloader_update_if_needed();
 
 }
 
@@ -408,6 +408,7 @@ void application_start()
     // one the key is sent to the cloud, this can be removed, since the key is fetched in
     // Spark_Protocol_init(). This is just a temporary measure while the key still needs
     // to be fetched via DFU.
+    // while(1);
 
     HAL_Core_Setup();
 
@@ -423,7 +424,6 @@ void application_start()
     HAL_FLASH_Read_CorePrivateKey(buf, &genspec);
     if (genspec.generated_key)
         HAL_Core_System_Reset();
-
 
     app_setup_and_loop();
 }

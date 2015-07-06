@@ -193,48 +193,48 @@ void manage_safe_mode()
  *******************************************************************************/
 void app_setup_and_loop(void)
 {    
-    HAL_Core_Init();
+    //HAL_Core_Init();
     // We have running firmware, otherwise we wouldn't have gotten here
-    DECLARE_SYS_HEALTH(ENTERED_Main);
-    DEBUG("Hello from Spark!");
+    // DECLARE_SYS_HEALTH(ENTERED_Main);
+    // DEBUG("Hello from Spark!");
     
-    manage_safe_mode();
+    // manage_safe_mode();
 
-#if defined (START_DFU_FLASHER_SERIAL_SPEED) || defined (START_YMODEM_FLASHER_SERIAL_SPEED)
-    USB_USART_LineCoding_BitRate_Handler(system_lineCodingBitRateHandler);
-#endif
+// #if defined (START_DFU_FLASHER_SERIAL_SPEED) || defined (START_YMODEM_FLASHER_SERIAL_SPEED)
+//     USB_USART_LineCoding_BitRate_Handler(system_lineCodingBitRateHandler);
+// #endif
 
-    SPARK_WLAN_Setup(Multicast_Presence_Announcement);
+    //SPARK_WLAN_Setup(Multicast_Presence_Announcement);
 
     /* Main loop */
     while (1)
     {
-        DECLARE_SYS_HEALTH(ENTERED_WLAN_Loop);
-        Spark_Idle();
+        // DECLARE_SYS_HEALTH(ENTERED_WLAN_Loop);
+        //Spark_Idle();
 
         static uint8_t SPARK_WIRING_APPLICATION = 0;
-        if(SPARK_WLAN_SLEEP || !SPARK_CLOUD_CONNECT || SPARK_CLOUD_CONNECTED || SPARK_WIRING_APPLICATION)
-        {
-            if(!SPARK_FLASH_UPDATE && !HAL_watchdog_reset_flagged())
-            {
-                if ((SPARK_WIRING_APPLICATION != 1))
+        // if(SPARK_WLAN_SLEEP || !SPARK_CLOUD_CONNECT || SPARK_CLOUD_CONNECTED || SPARK_WIRING_APPLICATION)
+        // {
+        //     if(!SPARK_FLASH_UPDATE && !HAL_watchdog_reset_flagged())
+        //     {
+                if (SPARK_WIRING_APPLICATION != 1)
                 {
                     //Execute user application setup only once
-                    DECLARE_SYS_HEALTH(ENTERED_Setup);
-                    if (system_mode()!=SAFE_MODE)
-                     setup();
+                    // DECLARE_SYS_HEALTH(ENTERED_Setup);
+                    // if (system_mode()!=SAFE_MODE)
+                        setup();
                     SPARK_WIRING_APPLICATION = 1;
                 }
 
                 //Execute user application loop
-                DECLARE_SYS_HEALTH(ENTERED_Loop);
-                if (system_mode()!=SAFE_MODE)
-                    loop();
-                    DECLARE_SYS_HEALTH(RAN_Loop);
-                }
-            }
-        }
+                // DECLARE_SYS_HEALTH(ENTERED_Loop);
+                // if (system_mode()!=SAFE_MODE)
+                        loop();
+                    // DECLARE_SYS_HEALTH(RAN_Loop);
+                // }
+            // }
     }
+}
 
 #ifdef USE_FULL_ASSERT
 
