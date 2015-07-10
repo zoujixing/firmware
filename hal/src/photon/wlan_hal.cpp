@@ -461,3 +461,46 @@ void wlan_connect_cancel(bool called_from_isr)
 {
     wwd_wifi_join_cancel(called_from_isr ? WICED_TRUE : WICED_FALSE);
 }
+
+
+extern "C" {
+
+#include "usb_hal.h"
+
+static host_semaphore_type_t        stdio_rx_mutex;
+static host_semaphore_type_t        stdio_tx_mutex;
+static volatile wiced_ring_buffer_t stdio_rx_buffer;
+static volatile uint8_t             stdio_rx_data[STDIO_BUFFER_SIZE];
+
+/******************************************************
+ *               Function Definitions
+ ******************************************************/
+
+platform_result_t platform_stdio_init( platform_uart_driver_t* driver, const platform_uart_t* interface, const platform_uart_config_t* config )
+{
+    host_rtos_init_semaphore( &stdio_tx_mutex );
+    host_rtos_set_semaphore ( &stdio_tx_mutex, WICED_FALSE );
+    host_rtos_init_semaphore( &stdio_rx_mutex );
+    host_rtos_set_semaphore ( &stdio_rx_mutex, WICED_FALSE );
+
+    ring_buffer_init( (wiced_ring_buffer_t*) &stdio_rx_buffer, (uint8_t*) stdio_rx_data, STDIO_BUFFER_SIZE );
+    return PLATFORM_SUCCESS;
+}
+
+void platform_stdio_write( const char* str, uint32_t len )
+{
+//    host_rtos_get_semaphore( &stdio_tx_mutex, NEVER_TIMEOUT, WICED_FALSE );
+    if (USB_USART_Baud_Rate()) {
+        while (len --> 0) {
+            USB_USART_Send_Data(*str++);
+        }
+    }
+//    host_rtos_set_semaphore( &stdio_tx_mutex, WICED_FALSE );
+}
+
+void platform_stdio_read( char* str, uint32_t len )
+{
+}
+
+
+}
