@@ -262,7 +262,9 @@ void network_connect(network_handle_t network, uint32_t flags, uint32_t param, v
             SPARK_LED_FADE = 0;
             LED_SetRGBColor(RGB_COLOR_GREEN);
             LED_On(LED_RGB);
-            wlan_connect_finalize();
+            wlan_result_t result = wlan_connect_finalize();
+            Serial.print("WLAN connection result ");
+            Serial.println(result);
         }
 
         Set_NetApp_Timeout();
