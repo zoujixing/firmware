@@ -9,6 +9,7 @@
 #include "delay_hal.h"
 #include "rgbled.h"
 #include <string.h>
+#include "spark_wiring_usbserial.h"
 
 WLanConfig ip_config;
 
@@ -154,6 +155,7 @@ void HAL_WLAN_notify_simple_config_done()
 
 void HAL_WLAN_notify_connected()
 {
+    Serial.println("WLAN connected");
     WLAN_CONNECTED = 1;
     if (!WLAN_DISCONNECT)
     {
@@ -164,6 +166,7 @@ void HAL_WLAN_notify_connected()
 
 void HAL_WLAN_notify_disconnected()
 {
+    Serial.println("WLAN disconnected");
     cloud_disconnect();
     if (WLAN_CONNECTED)     /// unsolicited disconnect
     {
@@ -199,6 +202,7 @@ void HAL_WLAN_notify_dhcp(bool dhcp)
     }
     if (dhcp)
     {
+        Serial.println("WLAN DHCP success");
         CLR_WLAN_WD();
         WLAN_DHCP = 1;
         SPARK_LED_FADE = 1;
@@ -206,6 +210,7 @@ void HAL_WLAN_notify_dhcp(bool dhcp)
     }
     else
     {
+        Serial.println("WLAN DHCP fail");
         WLAN_DHCP = 0;
         SPARK_LED_FADE = 0;
         if (WLAN_LISTEN_ON_FAILED_CONNECT)

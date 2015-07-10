@@ -42,6 +42,7 @@
 #include "system_mode.h"
 #include "rgbled.h"
 #include "ledcontrol.h"
+#include "spark_wiring_usbserial.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -200,6 +201,8 @@ void app_setup_and_loop(void)
 #endif
 
     SPARK_WLAN_Setup(Multicast_Presence_Announcement);
+
+    Serial.begin(9600);
 
     /* Main loop */
     while (1)
