@@ -234,6 +234,7 @@ void network_connect(network_handle_t network, uint32_t flags, uint32_t param, v
 {
     if (!network_ready(0, 0, NULL))
     {
+        Serial.print("**WLAN connect with DHCP volatile fix");
         bool was_sleeping = SPARK_WLAN_SLEEP;
 
         WLAN_DISCONNECT = 0;
