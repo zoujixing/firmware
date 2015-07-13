@@ -1804,7 +1804,7 @@
  * debug messages of certain types.
  */
 #ifndef LWIP_DBG_TYPES_ON
-#define LWIP_DBG_TYPES_ON               (LWIP_DBG_TRACE|LWIP_DBG_ON)
+#define LWIP_DBG_TYPES_ON               (0xF0)
 #endif
 
 /**
@@ -1874,7 +1874,7 @@
  * IP_DEBUG: Enable debugging for IP.
  */
 #ifndef IP_DEBUG
-#define IP_DEBUG                        LWIP_DBG_ON
+#define IP_DEBUG                        LWIP_DBG_OFF
 #endif
 
 /**
@@ -2014,15 +2014,14 @@
 /**
  * DHCP_DEBUG: Enable debugging in dhcp.c.
  */
-#ifndef DHCP_DEBUG
+
 #define DHCP_DEBUG                      LWIP_DBG_ON
-#endif
 
 /**
  * AUTOIP_DEBUG: Enable debugging in autoip.c.
  */
 #ifndef AUTOIP_DEBUG
-#define AUTOIP_DEBUG                    LWIP_DBG_ON
+#define AUTOIP_DEBUG                    LWIP_DBG_OFF
 #endif
 
 /**
