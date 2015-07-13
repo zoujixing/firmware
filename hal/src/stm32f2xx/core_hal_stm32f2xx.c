@@ -152,9 +152,6 @@ void HAL_Core_Config(void)
 {
     DECLARE_SYS_HEALTH(ENTERED_SparkCoreConfig);
 
-    LED_SetRGBColor(RGB_COLOR_WHITE);
-    LED_On(LED_RGB);
-
 #ifdef DFU_BUILD_ENABLE
     //Currently this is done through WICED library API so commented.
     //NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x20000);
@@ -169,29 +166,24 @@ void HAL_Core_Config(void)
         HAL_Pin_Mode(pin, INPUT);
 #endif
 
-    SysTick_Configuration();
-
     HAL_RTC_Configuration();
 
     HAL_RNG_Configuration();
+
+    LED_SetRGBColor(RGB_COLOR_WHITE);
+    LED_On(LED_RGB);
 
 #ifdef DFU_BUILD_ENABLE
     Load_SystemFlags();
 #endif
 
-
-    HAL_Delay_Milliseconds(500);
-    // override the WICED interrupts, specifically SysTick - there is a bug
-    // where WICED isn't ready for a SysTick until after main() has been called to
-    // fully intialize the RTOS.
     HAL_Core_Setup_override_interrupts();
-    LED_SetRGBColor(RGB_COLOR_BLUE);
 
 #if MODULAR_FIRMWARE
     // write protect system module parts if not already protected
     FLASH_WriteProtectMemory(FLASH_INTERNAL, CORE_FW_ADDRESS, USER_FIRMWARE_IMAGE_LOCATION - CORE_FW_ADDRESS, true);
 #endif
-    LED_SetRGBColor(RGB_COLOR_YELLOW);
+
 #ifdef USE_SERIAL_FLASH
     //Initialize Serial Flash
     sFLASH_Init();
@@ -200,8 +192,6 @@ void HAL_Core_Config(void)
                                       FLASH_INTERNAL, USER_FIRMWARE_IMAGE_LOCATION, FIRMWARE_IMAGE_SIZE,
                                       FACTORY_RESET_MODULE_FUNCTION, MODULE_VERIFY_CRC|MODULE_VERIFY_FUNCTION|MODULE_VERIFY_DESTINATION_IS_START_ADDRESS); //true to verify the CRC during copy also
 #endif
-    LED_SetRGBColor(RGB_COLOR_ORANGE);
-
 
 }
 
@@ -213,15 +203,8 @@ void HAL_Core_Setup(void) {
 
     /* Reset system to disable IWDG if enabled in bootloader */
     IWDG_Reset_Enable(0);
-
-    LED_SetRGBColor(RGB_COLOR_GREEN);
-
     HAL_Core_Setup_finalize();
-    LED_SetRGBColor(RGB_COLOR_MAGENTA);
-
     bootloader_update_if_needed();
-
-    LED_SetRGBColor(RGB_COLOR_CYAN);
 
 }
 

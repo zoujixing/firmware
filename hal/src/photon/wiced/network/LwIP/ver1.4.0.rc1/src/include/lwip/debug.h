@@ -34,7 +34,6 @@
 
 #include "lwip/arch.h"
 
-#define LWIP_DEBUG
 
 /** lower two bits indicate debug level
  * - 0 all
@@ -47,7 +46,10 @@
 #define LWIP_DBG_LEVEL_WARNING 0x01 /* bad checksums, dropped packets, ... */
 #define LWIP_DBG_LEVEL_SERIOUS 0x02 /* memory allocation failures, ... */
 #define LWIP_DBG_LEVEL_SEVERE  0x03
-#define LWIP_DBG_MASK_LEVEL    0x03
+#define LWIP_DBG_MASK_LEVEL    0x00
+
+#define LWIP_DEBUG LWIP_DBG_LEVEL_ALL
+
 
 /** flag for LWIP_DEBUGF to enable that debug message */
 #define LWIP_DBG_ON            0x80U
