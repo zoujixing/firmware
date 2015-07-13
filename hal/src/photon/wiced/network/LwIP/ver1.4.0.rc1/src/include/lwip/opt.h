@@ -2015,14 +2015,14 @@
  * DHCP_DEBUG: Enable debugging in dhcp.c.
  */
 #ifndef DHCP_DEBUG
-#define DHCP_DEBUG                      LWIP_DBG_OFF
+#define DHCP_DEBUG                      LWIP_DBG_ON
 #endif
 
 /**
  * AUTOIP_DEBUG: Enable debugging in autoip.c.
  */
 #ifndef AUTOIP_DEBUG
-#define AUTOIP_DEBUG                    LWIP_DBG_OFF
+#define AUTOIP_DEBUG                    LWIP_DBG_ON
 #endif
 
 /**
