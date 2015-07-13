@@ -149,6 +149,8 @@ extern "C" {
  */
 #define PBUF_POOL_BUFSIZE              (LWIP_MEM_ALIGN_SIZE(WICED_LINK_MTU) + LWIP_MEM_ALIGN_SIZE(sizeof(struct pbuf)) + 1)
 
+#define ETHARP_STATS 0
+#define LWIP_DHCP_BOOTP_FILE 0
 
 /**
  * TCP_MSS: TCP Maximum segment size. (default is 536, a conservative default,

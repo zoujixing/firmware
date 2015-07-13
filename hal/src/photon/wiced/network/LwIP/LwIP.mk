@@ -35,7 +35,7 @@
 
 NAME := LwIP
 
-VERSION := 1.4.0.rc1
+VERSION := 1.4.0
 
 $(NAME)_COMPONENTS += WICED/network/LwIP/WWD
 ifeq (,$(APP_WWD_ONLY)$(NS_WWD_ONLY)$(RTOS_WWD_ONLY))
