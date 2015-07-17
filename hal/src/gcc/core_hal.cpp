@@ -32,8 +32,28 @@
 #include <cstdint>
 #include <iostream>
 #include "filesystem.h"
+#include "service_debug.h"
 
 using std::cout;
+
+void debug_output_(const char* msg);
+
+extern "C" int main(int argc, char* argv[])
+{
+    if (argc>1) {
+        printf("set root folder to %s\n", argv[1]);
+        set_root_dir(argv[1]);
+    }
+#if 0
+    for (char** env = envp; *env != 0; env++)
+    {
+        char* thisEnv = *env;
+        printf("%s\n", thisEnv);
+    }
+#endif
+    app_setup_and_loop();
+    return 0;
+}
 
 class Stream;
 extern "C" bool Ymodem_Serial_Flash_Update(Stream *serialObj, uint32_t sFlashAddress)
@@ -42,8 +62,12 @@ extern "C" bool Ymodem_Serial_Flash_Update(Stream *serialObj, uint32_t sFlashAdd
 }
 
 
-
-void debug_output_(const char* msg) {
+/**
+ * Output debug info to standard output.
+ * @param msg
+ */
+void debug_output_(const char* msg)
+{
     cout << msg << std::endl;
 }
 
@@ -116,8 +140,7 @@ void HAL_Core_Mode_Button_Reset(void)
 
 void HAL_Core_System_Reset(void)
 {
-    // todo - terminate the process, or throw an exception to have the top level loop unwind.
-    MSG("System reset not implemented.");
+    exit(0);
 }
 
 void HAL_Core_Factory_Reset(void)
@@ -233,15 +256,6 @@ void HAL_Notify_WDT()
 
 void HAL_Core_Init(void)
 {
-}
-
-extern "C" int main(int argc, char* argv[]) {
-    if (argc>1) {
-        printf("set keys folder to %s\n", argv[1]);
-        set_root_dir(argv[1]);
-    }
-    app_setup_and_loop();
-    return 0;
 }
 
 void HAL_Bootloader_Lock(bool lock)

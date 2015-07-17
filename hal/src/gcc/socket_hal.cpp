@@ -25,6 +25,7 @@
 #include "socket_hal.h"
 #include "inet_hal.h"
 #include "core_msg.h"
+#include "device_globals.h"
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wmissing-braces"
@@ -40,21 +41,21 @@ namespace ip = boost::asio::ip;
 const sock_handle_t SOCKET_MAX = (sock_handle_t)8;
 const sock_handle_t SOCKET_INVALID = (sock_handle_t)-1;
 
-boost::asio::io_service io_service;
+boost::asio::io_service device_io_service;
 boost::system::error_code ec;
 
 boost::array<ip::tcp::socket, 8> handles = {
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service),
-    ip::tcp::socket(io_service)
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service),
+    ip::tcp::socket(device_io_service)
 };
 
-ip::tcp::socket invalid_(io_service);
+ip::tcp::socket invalid_(device_io_service);
 
 ip::tcp::socket& invalid() {
     return invalid_;
@@ -78,25 +79,6 @@ sock_handle_t next_unused()
 
 bool is_valid(ip::tcp::socket& handle) {
     return &handle!=&invalid();
-}
-
-int inet_gethostbyname(char* hostname, uint16_t hostnameLen, HAL_IPAddress* out_ip_addr)
-{
-    out_ip_addr->ipv4 = 0;
-    ip::tcp::resolver resolver(io_service);
-    ip::tcp::resolver::query query(hostname, "");
-    for(ip::tcp::resolver::iterator i = resolver.resolve(query);
-                            i != ip::tcp::resolver::iterator();
-                            ++i)
-    {
-        ip::tcp::endpoint end = *i;
-        ip::address addr = end.address();
-        if (addr.is_v4()) {
-            ip::address_v4 addr_v4 = addr.to_v4();
-            out_ip_addr->ipv4 = addr_v4.to_ulong();
-        }
-    }
-    return 0;
 }
 
 int32_t socket_connect(sock_handle_t sd, const sockaddr_t *addr, long addrlen)

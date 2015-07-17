@@ -1,4 +1,5 @@
 #include "ota_flash_hal.h"
+#include "device_config.h"
 #include <string.h>
 #include <cstdio>
 
@@ -10,8 +11,6 @@ void HAL_System_Info(hal_system_info_t* info, bool create, void* reserved)
     info->module_count = 0;
     info->modules = NULL;
 }
-
-
 
 uint32_t HAL_OTA_FlashAddress()
 {
@@ -105,11 +104,15 @@ void parseServerAddressData(ServerAddress* server_addr, uint8_t* buf)
 }
 
 
+#define MAXIMUM_CLOUD_KEY_LEN (512)
+#define SERVER_ADDRESS_OFFSET (384)
+
 void HAL_FLASH_Read_ServerAddress(ServerAddress* server_addr)
 {
-    uint8_t buf[EXTERNAL_FLASH_SERVER_DOMAIN_LENGTH];
-    read_file("server_address", buf, EXTERNAL_FLASH_SERVER_DOMAIN_LENGTH);
-    parseServerAddressData(server_addr, buf);
+    uint8_t buf[MAXIMUM_CLOUD_KEY_LEN];
+
+    read_config_file(CLOUD_PUBLIC_KEY, buf, MAXIMUM_CLOUD_KEY_LEN);
+    parseServerAddressData(server_addr, buf+SERVER_ADDRESS_OFFSET);
 }
 
 bool HAL_OTA_Flashed_GetStatus(void)
@@ -126,12 +129,12 @@ void HAL_OTA_Flashed_ResetStatus(void)
 
 void HAL_FLASH_Read_ServerPublicKey(uint8_t *keyBuffer)
 {
-    read_file("public_key", keyBuffer, PUBLIC_KEY_LEN);
+    read_config_file(CLOUD_PUBLIC_KEY, keyBuffer, PUBLIC_KEY_LEN);
 }
 
 int HAL_FLASH_Read_CorePrivateKey(uint8_t *keyBuffer, private_key_generation_t* generation)
 {
-    read_file("private_key", keyBuffer, PRIVATE_KEY_LEN);
+    read_config_file(DEVICE_PRIVATE_KEY, keyBuffer, PRIVATE_KEY_LEN);
     return 0;
 }
 

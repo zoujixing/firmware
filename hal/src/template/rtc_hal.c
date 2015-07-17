@@ -26,25 +26,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "rtc_hal.h"
 
-/* Private typedef -----------------------------------------------------------*/
-
-/* Private define ------------------------------------------------------------*/
-
-/* Private macro -------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Extern variables ----------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-uint32_t HAL_RTC_Get_Counter(void)
+time_t HAL_RTC_Get_UnixTime(void)
 {
     return 0;
-}
-
-void HAL_RTC_Set_Counter(uint32_t value)
-{
 }
 
 void HAL_RTC_Set_Alarm(uint32_t value)
