@@ -39,30 +39,9 @@
 
 using std::string;
 
-uint8_t hex2dec(char c) {
-    if (c<='9')
-        return uint8_t(c-'0');
-    if (c<='Z')
-        return uint8_t(c-'A');
-    return uint8_t(c-'a');
-}
-
-
 unsigned HAL_device_ID(uint8_t* dest, unsigned destLen)
 {
-    string device_id = get_configuration_value(DEVICE_ID, "000000000000000000000000");
-    uint8_t len = device_id.length()>>1;
-    if (dest && destLen<len)
-        len = destLen;
-    if (dest) {
-        for (int i=0; i<len; i++) {
-            char c1 = device_id[i*2];
-            char c2 = device_id[i*2+1];
-            uint8_t b = hex2dec(c1) << 4 | hex2dec(c2);
-            dest[i] = b;
-        }
-    }
-    return len;
+    return deviceConfig.fetchDeviceID(dest, destLen);
 }
 
 unsigned HAL_Platform_ID()

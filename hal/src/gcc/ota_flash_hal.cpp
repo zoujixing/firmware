@@ -109,10 +109,7 @@ void parseServerAddressData(ServerAddress* server_addr, uint8_t* buf)
 
 void HAL_FLASH_Read_ServerAddress(ServerAddress* server_addr)
 {
-    uint8_t buf[MAXIMUM_CLOUD_KEY_LEN];
-
-    read_config_file(CLOUD_PUBLIC_KEY, buf, MAXIMUM_CLOUD_KEY_LEN);
-    parseServerAddressData(server_addr, buf+SERVER_ADDRESS_OFFSET);
+    parseServerAddressData(server_addr, deviceConfig.server_key+SERVER_ADDRESS_OFFSET);
 }
 
 bool HAL_OTA_Flashed_GetStatus(void)
@@ -129,12 +126,12 @@ void HAL_OTA_Flashed_ResetStatus(void)
 
 void HAL_FLASH_Read_ServerPublicKey(uint8_t *keyBuffer)
 {
-    read_config_file(CLOUD_PUBLIC_KEY, keyBuffer, PUBLIC_KEY_LEN);
+    memcpy(keyBuffer, deviceConfig.server_key, PUBLIC_KEY_LEN);
 }
 
 int HAL_FLASH_Read_CorePrivateKey(uint8_t *keyBuffer, private_key_generation_t* generation)
 {
-    read_config_file(DEVICE_PRIVATE_KEY, keyBuffer, PRIVATE_KEY_LEN);
+    memcpy(keyBuffer, deviceConfig.device_key, PRIVATE_KEY_LEN);
     return 0;
 }
 

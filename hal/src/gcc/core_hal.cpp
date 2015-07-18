@@ -33,6 +33,7 @@
 #include <iostream>
 #include "filesystem.h"
 #include "service_debug.h"
+#include "device_config.h"
 
 using std::cout;
 
@@ -40,10 +41,12 @@ void debug_output_(const char* msg);
 
 extern "C" int main(int argc, char* argv[])
 {
+    /*
     if (argc>1) {
         printf("set root folder to %s\n", argv[1]);
         set_root_dir(argv[1]);
     }
+     */
 #if 0
     for (char** env = envp; *env != 0; env++)
     {
@@ -51,7 +54,10 @@ extern "C" int main(int argc, char* argv[])
         printf("%s\n", thisEnv);
     }
 #endif
-    app_setup_and_loop();
+
+    if (read_device_config(argc, argv)) {
+        app_setup_and_loop();
+    }
     return 0;
 }
 
@@ -120,13 +126,6 @@ char* bytes2hex(const uint8_t* buf, char* result, unsigned len)
  *******************************************************************************/
 void HAL_Core_Config(void)
 {
-    unsigned len = HAL_device_ID(NULL, 0);
-    uint8_t id[len];
-    char hex[len*2+1];
-    HAL_device_ID(id, len);
-    *bytes2hex(id, hex, len)=0;
-
-    MSG("Core device id %s", hex);
 }
 
 bool HAL_Core_Mode_Button_Pressed(uint16_t pressedMillisDuration)
