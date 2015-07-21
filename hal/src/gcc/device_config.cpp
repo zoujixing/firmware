@@ -31,8 +31,7 @@ namespace po = boost::program_options;
 using namespace std;
 
 const char* DEVICE_ID = "device_id";
-const char* DEVICE_PRIVATE_KEY = "device_private_key";
-const char* SERVER_PUBLIC_KEY = "server_public_key";
+const char* STATE_DIR = "state";
 
 DeviceConfig deviceConfig;
 
@@ -66,8 +65,9 @@ public:
 
         device_options.add_options()
             ("device_id,id", po::value<string>(&config.device_id), "the device ID")
-            ("device_key,dk", po::value<string>(&config.device_key)->default_value("device_key"), "the filename containing the device private key")
-            ("server_key,sk", po::value<string>(&config.server_key)->default_value("server_key"), "the filename containing the server public key")
+            ("device_key,dk", po::value<string>(&config.device_key)->default_value("device_key.der"), "the filename containing the device private key")
+            ("server_key,sk", po::value<string>(&config.server_key)->default_value("server_key.der"), "the filename containing the server public key")
+            ("state,s", po::value<string>(&config.periph_directory)->default_value("state"), "the directory where device state and peripherals is stored")
         ;
 
         command_line_options.add(program_options).add(device_options);
@@ -77,7 +77,6 @@ public:
 
         po::options_description environment_options;
         environment_options.add(device_options);
-
 
         string config_file = "vdev.conf";
         ifstream ifs(config_file.c_str());
@@ -157,3 +156,16 @@ bool read_device_config(int argc, char* argv[])
     deviceConfig.read(parser.config);
     return true;
 }
+
+void DeviceConfig::read(Configuration& configuration)
+{
+    size_t length = configuration.device_id.length();
+    if (length!=24) {
+        throw std::invalid_argument(std::string("expected device ID of length 24 from config ") + DEVICE_ID + ", got: '"+configuration.device_id+ "'");
+    }
+    hex2bin(configuration.device_id, device_id, sizeof(device_id));
+
+    read_file(configuration.device_key.c_str(), device_key, sizeof(device_key));
+    read_file(configuration.server_key.c_str(), server_key, sizeof(server_key));
+}
+

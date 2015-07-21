@@ -2,6 +2,7 @@
 #include "device_config.h"
 #include <string.h>
 #include <cstdio>
+#include "service_debug.h"
 
 #include "filesystem.h"
 
@@ -124,14 +125,22 @@ void HAL_OTA_Flashed_ResetStatus(void)
 #define PUBLIC_KEY_LEN 294
 #define PRIVATE_KEY_LEN 612
 
+extern "C" char* bytes2hexbuf(const uint8_t* buf, unsigned len, char* out);
+
 void HAL_FLASH_Read_ServerPublicKey(uint8_t *keyBuffer)
 {
     memcpy(keyBuffer, deviceConfig.server_key, PUBLIC_KEY_LEN);
+    char buf[PUBLIC_KEY_LEN*2];
+    bytes2hexbuf(keyBuffer, PUBLIC_KEY_LEN, buf);
+    INFO("server key: %s", buf);
 }
 
 int HAL_FLASH_Read_CorePrivateKey(uint8_t *keyBuffer, private_key_generation_t* generation)
 {
     memcpy(keyBuffer, deviceConfig.device_key, PRIVATE_KEY_LEN);
+    char buf[PRIVATE_KEY_LEN*2];
+    bytes2hexbuf(keyBuffer, PRIVATE_KEY_LEN, buf);
+    INFO("device key: %s", buf);
     return 0;
 }
 

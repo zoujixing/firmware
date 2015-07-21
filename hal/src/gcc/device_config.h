@@ -49,6 +49,7 @@ struct Configuration
     std::string device_id;
     std::string device_key;
     std::string server_key;
+    std::string periph_directory;
 };
 
 
@@ -58,28 +59,20 @@ struct Configuration
 struct DeviceConfig
 {
     uint8_t device_id[12];
-    uint8_t device_key[512];
+    uint8_t device_key[1024];
     uint8_t server_key[1024];
 
 
     size_t hex2bin(const std::string& hex, uint8_t* dest, size_t destLen);
 
-    void read(Configuration& configuration)
-    {
-        size_t length = configuration.device_id.length();
-        if (length!=24) {
-            throw std::invalid_argument(std::string("expected device ID of length 24 from environment ") + DEVICE_ID + ", got: '"+configuration.device_id+ "'");
-        }
-
-        read_file(configuration.device_key.c_str(), device_key, sizeof(device_key));
-        read_file(configuration.server_key.c_str(), server_key, sizeof(server_key));
-    }
+    void read(Configuration& configuration);
 
     size_t fetchDeviceID(uint8_t* dest, size_t destLen)
     {
         if (destLen>12)
             destLen = 12;
-        memcpy(dest, device_id, destLen);
+        if (dest)
+            memcpy(dest, device_id, destLen);
         return destLen;
     }
 };

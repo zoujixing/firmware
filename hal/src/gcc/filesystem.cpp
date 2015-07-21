@@ -3,6 +3,7 @@
 #include <string.h>
 #include <cstdio>
 #include <stdexcept>
+#include "service_debug.h"
 
 const char* rootDir = NULL;
 
@@ -23,7 +24,8 @@ void read_file(const char* filename, void* data, size_t length)
     strcat(buf, filename);
     FILE *f = fopen(buf, "rb");
     if (f!=NULL) {
-        fread(data, length, 1, f);
+        length = fread(data, 1, length, f);
+        INFO("read file %s length %d", buf, length);
         fclose(f);
     }
     else
