@@ -8,7 +8,7 @@ include $(COMMON_BUILD)/common-tools.mk
 #
 
 # C compiler flags
-CFLAGS +=  -g3 -m64
+CFLAGS +=  -g3 -m64 -O3 -gdwarf-2
 
 ASFLAGS +=  -g3
 
