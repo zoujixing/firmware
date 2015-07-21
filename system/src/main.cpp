@@ -172,7 +172,7 @@ extern "C" void HAL_RTCAlarm_Handler(void)
 void manage_safe_mode()
 {
     uint16_t flag = (HAL_Bootloader_Get_Flag(BOOTLOADER_FLAG_STARTUP_MODE));
-    if (flag != 0xFF) { // old bootloader
+    if (flag != 0xFFFF) { // old bootloader
         if (flag & 1) {
             set_system_mode(SAFE_MODE);
         }
@@ -191,7 +191,9 @@ void app_setup_and_loop(void)
     HAL_Core_Init();
     // We have running firmware, otherwise we wouldn't have gotten here
     DECLARE_SYS_HEALTH(ENTERED_Main);
-    DEBUG("Hello from Spark!");
+    DEBUG("Hello from Particle!");
+    String s = spark_deviceID();
+    INFO("Device %s started", s.c_str());
 
     manage_safe_mode();
 

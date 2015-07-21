@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "device_keys.h"
+#include "service_debug.h"
 
 #ifndef PRODUCT_ID
 #define PRODUCT_ID (0xffff)
@@ -97,7 +98,7 @@ int SparkProtocol::handshake(void)
 {
   memcpy(queue + 40, device_id, 12);
   int err = blocking_receive(queue, 40);
-  if (0 > err) return err;
+  if (0 > err) { ERROR("Handshake: could not receive nonce: %d", err);  return err; }
 
   parse_device_pubkey_from_privkey(queue+52, core_private_key);
 
@@ -107,25 +108,28 @@ int SparkProtocol::handshake(void)
   err = rsa_pkcs1_encrypt(&rsa, RSA_PUBLIC, len, queue, queue + len);
   rsa_free(&rsa);
 
-  if (err) return err;
+  if (err) { ERROR("Handshake: rsa encrypt error %d", err); return err; }
 
   blocking_send(queue + len, 256);
   err = blocking_receive(queue, 384);
-  if (0 > err) return err;
+  if (0 > err) { ERROR("Handshake: Unable to receive key %d", err); return err; }
 
   err = set_key(queue);
-  if (err) return err;
+  if (err) { ERROR("Handshake:  could not set key, %d"); return err; }
 
   queue[0] = 0x00;
   queue[1] = 0x10;
   hello(queue + 2, descriptor.was_ota_upgrade_successful());
 
   err = blocking_send(queue, 18);
-  if (0 > err) return err;
+  if (0 > err) { ERROR("Hanshake: could not send hello message: %d", err); return err; }
 
   if (!event_loop())        // read the hello message from the server
+  {
+      ERROR("Handshake: could not receive hello response");
       return -1;
-
+  }
+  INFO("Hanshake: completed");
   return 0;
 }
 

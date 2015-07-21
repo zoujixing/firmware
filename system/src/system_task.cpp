@@ -37,6 +37,7 @@
 #include "delay_hal.h"
 #include "timer_hal.h"
 #include "rgbled.h"
+#include "service_debug.h"
 
 #include "spark_wiring_network.h"
 #include "spark_wiring_constants.h"
@@ -99,7 +100,7 @@ void manage_network_connection()
     {
         if (SPARK_WLAN_STARTED)
         {
-            DEBUG("Resetting WLAN!");
+            WARN("Resetting WLAN!");
             auto was_sleeping = SPARK_WLAN_SLEEP;
             cloud_disconnect();
             network_off(Network, 0, 0, NULL);
@@ -224,14 +225,18 @@ void establish_cloud_connection()
         if (in_cloud_backoff_period())
             return;
 
+        INFO("Cloud: connecting");
         LED_On(LED_RGB);
-        if (Spark_Connect() >= 0)
+        int connect_result = Spark_Connect();
+        if (connect_result >= 0)
         {
             cfod_count = 0;
             SPARK_CLOUD_SOCKETED = 1;
+            INFO("Cloud socket connected");
         }
         else
         {
+            WARN("Cloud socket connection failed: %d", connect_result);
             cloud_connection_failed();
             SPARK_CLOUD_SOCKETED = 0;
             //if (!SPARK_WLAN_RESET)
@@ -270,7 +275,7 @@ void handle_cloud_connection(bool force_events)
                     // RSA signature verification error, magenta
                     LED_SetRGBColor(RGB_COLOR_MAGENTA);
                 }
-
+                WARN("Cloud handshake failed, code=%d", err);
                 LED_On(LED_RGB);
 
                 Spark_Disconnect(); // clean up the socket
@@ -278,6 +283,7 @@ void handle_cloud_connection(bool force_events)
             }
             else
             {
+                INFO("Cloud connected");
                 SPARK_CLOUD_CONNECTED = 1;
                 cloud_failed_connection_attempts = 0;
             }
@@ -294,6 +300,7 @@ void manage_cloud_connection(bool force_events)
 {
     if (SPARK_CLOUD_CONNECT == 0)
     {
+        INFO("Cloud: disconnecting");
         cloud_disconnect();
     }
     else // cloud connection is wanted
@@ -387,6 +394,7 @@ void cloud_disconnect()
             LED_SetRGBColor(RGB_COLOR_GREEN);
             LED_On(LED_RGB);
         }
+        INFO("Cloud: disconnected");
     }
 #endif
 }
