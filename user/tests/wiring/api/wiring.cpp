@@ -2,6 +2,12 @@
 #include "testapi.h"
 #include "spark_wiring_i2c.h"
 
+test(api_i2c)
+{
+    int buffer;
+    API_COMPILE(buffer==I2C_BUFFER_LENGTH);
+}
+
 test(api_wiring_pinMode) {
 
     PinMode mode = PIN_MODE_NONE;
@@ -47,3 +53,15 @@ test(api_wiring_system_interrupt) {
     API_COMPILE(detachSystemInterrupt(SysInterrupt_TIM3_IRQ));
 }
 #endif
+
+test(api_rgb) {
+    bool flag; uint8_t value;
+    API_COMPILE(RGB.brightness(50));
+    API_COMPILE(RGB.brightness(50, false));
+    API_COMPILE(flag=RGB.controlled());
+    API_COMPILE(RGB.control(true));
+    API_COMPILE(RGB.color(255,255,255));
+    API_COMPILE(RGB.color(RGB_COLOR_WHITE));
+    API_COMPILE(flag=RGB.brightness());
+
+}

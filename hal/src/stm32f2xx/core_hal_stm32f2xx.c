@@ -162,11 +162,19 @@ void HAL_Core_Config(void)
 
     //Wiring pins default to inputs
 #if !defined(USE_SWD_JTAG) && !defined(USE_SWD)
-    for (pin_t pin=0; pin<20; pin++)
+    for (pin_t pin=0; pin<=19; pin++)
+        HAL_Pin_Mode(pin, INPUT);
+#if PLATFORM_ID==8 // Additional pins for P1
+    for (pin_t pin=24; pin<=29; pin++)
         HAL_Pin_Mode(pin, INPUT);
 #endif
+#if PLATFORM_ID==10 // Additional pins for Electron
+    for (pin_t pin=24; pin<=35; pin++)
+        HAL_Pin_Mode(pin, INPUT);
+#endif
+#endif
 
-    //SysTick_Configuration(); This causes the Photon to sometimes hang on startup. See FIRM-123. 
+    HAL_Core_Config_systick_configuration();
 
     HAL_RTC_Configuration();
 
