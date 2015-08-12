@@ -51,6 +51,10 @@ extern char link_ram_interrupt_vectors_location_end;
     extern void OTG_HS_irq(void);
 #endif
 
+/* I2C Interrupt Handlers from i2c_hal.c */
+extern void I2C1_EV_irq(void);
+extern void I2C1_ER_irq(void);
+
 #if 0
 IDX[x] = added IRQ handler
 00 [ ] _estack
@@ -101,8 +105,8 @@ IDX[x] = added IRQ handler
 44 [x] TIM2_IRQHandler                   // TIM2
 45 [x] TIM3_IRQHandler                   // TIM3
 46 [x] TIM4_IRQHandler                   // TIM4
-47 [ ] I2C1_EV_IRQHandler                // I2C1 Event
-48 [ ] I2C1_ER_IRQHandler                // I2C1 Error
+47 [x] I2C1_EV_IRQHandler                // I2C1 Event
+48 [x] I2C1_ER_IRQHandler                // I2C1 Error
 49 [ ] I2C2_EV_IRQHandler                // I2C2 Event
 50 [ ] I2C2_ER_IRQHandler                // I2C2 Error
 51 [ ] SPI1_IRQHandler                   // SPI1
@@ -172,6 +176,8 @@ const unsigned TIM1_CC_IRQHandler_Idx               = 43;
 const unsigned TIM2_IRQHandler_Idx                  = 44;
 const unsigned TIM3_IRQHandler_Idx                  = 45;
 const unsigned TIM4_IRQHandler_Idx                  = 46;
+const unsigned I2C1_EV_IRQHandler_Idx               = 47;
+const unsigned I2C1_ER_IRQHandler_Idx               = 48;
 const unsigned USART1_IRQHandler_Idx                = 53;
 const unsigned USART2_IRQHandler_Idx                = 54;
 const unsigned USART3_IRQHandler_Idx                = 55;
@@ -231,6 +237,8 @@ void HAL_Core_Setup_override_interrupts(void)
     isrs[TIM2_IRQHandler_Idx]               = (uint32_t)TIM2_irq;
     isrs[TIM3_IRQHandler_Idx]               = (uint32_t)TIM3_irq;
     isrs[TIM4_IRQHandler_Idx]               = (uint32_t)TIM4_irq;
+    isrs[I2C1_EV_IRQHandler_Idx]            = (uint32_t)I2C1_EV_irq;
+    isrs[I2C1_ER_IRQHandler_Idx]            = (uint32_t)I2C1_ER_irq;
     isrs[USART1_IRQHandler_Idx]             = (uint32_t)HAL_USART1_Handler;
     isrs[USART2_IRQHandler_Idx]             = (uint32_t)HAL_USART2_Handler;
     isrs[USART3_IRQHandler_Idx]             = (uint32_t)HAL_USART3_Handler;
@@ -348,8 +356,8 @@ void CAN1_TX_IRQHandler(void)       {__ASM("bkpt 0");}
 void CAN1_RX0_IRQHandler(void)      {__ASM("bkpt 0");}
 void CAN1_RX1_IRQHandler(void)      {__ASM("bkpt 0");}
 void CAN1_SCE_IRQHandler(void)      {__ASM("bkpt 0");}
-void I2C1_EV_IRQHandler(void)       {__ASM("bkpt 0");}
-void I2C1_ER_IRQHandler(void)       {__ASM("bkpt 0");}
+//void I2C1_EV_IRQHandler(void)       {__ASM("bkpt 0");}
+//void I2C1_ER_IRQHandler(void)       {__ASM("bkpt 0");}
 void I2C2_EV_IRQHandler(void)       {__ASM("bkpt 0");}
 void I2C2_ER_IRQHandler(void)       {__ASM("bkpt 0");}
 void SPI1_IRQHandler(void)          {__ASM("bkpt 0");}

@@ -36,7 +36,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 #define BUFFER_LENGTH   32
-#define EVENT_TIMEOUT   100
+#define EVENT_TIMEOUT   500
 
 #define TRANSMITTER     0x00
 #define RECEIVER        0x01
@@ -47,22 +47,38 @@ static I2C_InitTypeDef I2C_InitStructure;
 static uint32_t I2C_ClockSpeed = CLOCK_SPEED_100KHZ;
 static bool I2C_Enabled = false;
 
-static uint8_t rxBuffer[BUFFER_LENGTH];
-static uint8_t rxBufferIndex = 0;
-static uint8_t rxBufferLength = 0;
+volatile uint8_t rxBuffer[BUFFER_LENGTH];
+volatile uint8_t rxBufferIndex = 0;
+volatile uint8_t rxBufferLength = 0;
 
-static uint8_t txAddress = 0;
-static uint8_t txBuffer[BUFFER_LENGTH];
-static uint8_t txBufferIndex = 0;
-static uint8_t txBufferLength = 0;
+volatile uint8_t txAddress = 0;
+volatile uint8_t txBuffer[BUFFER_LENGTH];
+volatile uint8_t txBufferIndex = 0;
+volatile uint8_t txBufferLength = 0;
 
-static uint8_t transmitting = 0;
+volatile uint8_t transmitting = 0;
 
 /* Extern variables ----------------------------------------------------------*/
 
 /* Private function prototypes -----------------------------------------------*/
 static void (*callback_onRequest)(void);
 static void (*callback_onReceive)(int);
+
+void HAL_I2C_SoftwareReset(void)
+{
+    /* Disable the I2C peripheral */
+    I2C_Cmd(I2C1, DISABLE);
+
+    /* Reset all I2C registers */
+    I2C_SoftwareResetCmd(I2C1, ENABLE);
+    I2C_SoftwareResetCmd(I2C1, DISABLE);
+
+    /* Configure the I2C peripheral */
+    I2C_Init(I2C1, &I2C_InitStructure);
+
+    /* Enable the I2C peripheral */
+    I2C_Cmd(I2C1, ENABLE);
+}
 
 void HAL_I2C_Set_Speed(uint32_t speed)
 {
@@ -86,6 +102,15 @@ void HAL_I2C_Stretch_Clock(bool stretch)
     }
 }
 
+/* DEBUGGING CODE FOR LOGIC ANALYZER */
+void pulsePin(pin_t pin, int8_t num) {
+    do {
+        HAL_GPIO_Write(pin, 1);
+        HAL_GPIO_Write(pin, 0);
+    }
+    while (--num != 0);
+}
+
 void HAL_I2C_Begin(I2C_Mode mode, uint8_t address)
 {
     STM32_Pin_Info* PIN_MAP = HAL_Pin_Map();
@@ -104,9 +129,13 @@ void HAL_I2C_Begin(I2C_Mode mode, uint8_t address)
 
     HAL_Pin_Mode(SCL, AF_OUTPUT_DRAIN);
     HAL_Pin_Mode(SDA, AF_OUTPUT_DRAIN);
+    HAL_Pin_Mode(D4, OUTPUT); /* DEBUG event handler */
+    HAL_Pin_Mode(D5, OUTPUT); /* DEBUG error handler */
+    HAL_Pin_Mode(D6, OUTPUT); /* DEBUG endTransmission */
+    HAL_Pin_Mode(D7, OUTPUT); /* DEBUG requestData */
 
-    if(mode != I2C_MODE_MASTER)
-    {
+    // if(mode != I2C_MODE_MASTER)
+    // {
         NVIC_InitTypeDef  NVIC_InitStructure;
 
         NVIC_InitStructure.NVIC_IRQChannel = I2C1_EV_IRQn;
@@ -117,7 +146,7 @@ void HAL_I2C_Begin(I2C_Mode mode, uint8_t address)
 
         NVIC_InitStructure.NVIC_IRQChannel = I2C1_ER_IRQn;
         NVIC_Init(&NVIC_InitStructure);
-    }
+    // }
 
     I2C_DeInit(I2C1);
 
@@ -135,6 +164,8 @@ void HAL_I2C_Begin(I2C_Mode mode, uint8_t address)
     {
         I2C_ITConfig(I2C1, I2C_IT_ERR | I2C_IT_EVT | I2C_IT_BUF, ENABLE);
     }
+
+    I2C_ITConfig(I2C1, I2C_IT_ERR, ENABLE); // Master debug
 
     I2C_Enabled = true;
 }
@@ -160,13 +191,21 @@ uint32_t HAL_I2C_Request_Data(uint8_t address, uint8_t quantity, uint8_t stop)
         quantity = BUFFER_LENGTH;
     }
 
+    //HAL_I2C_SoftwareReset();
+
+    pulsePin(D7, 1);
+
     /* Send START condition */
     I2C_GenerateSTART(I2C1, ENABLE);
 
     _millis = HAL_Timer_Get_Milli_Seconds();
     while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT))
     {
-        if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) return 0;
+        if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) {
+            pulsePin(D7, 2);
+            //HAL_I2C_SoftwareReset();
+            return 0;
+        }
     }
 
     /* Send Slave address for read */
@@ -180,13 +219,14 @@ uint32_t HAL_I2C_Request_Data(uint8_t address, uint8_t quantity, uint8_t stop)
             /* Send STOP Condition */
             //Adding a STOP here is not helping because of STM32 limitation mentioned in ERRATA
             //I2C_GenerateSTOP(I2C1, ENABLE);
+            pulsePin(D7, 3);
             return 0;
         }
     }
 
     /* perform blocking read into buffer */
-    uint8_t *pBuffer = rxBuffer;
-    uint8_t numByteToRead = quantity;
+    volatile uint8_t *pBuffer = rxBuffer;
+    volatile uint8_t numByteToRead = quantity;
 
     /* While there is data to be read */
     _millis = HAL_Timer_Get_Milli_Seconds();
@@ -196,6 +236,8 @@ uint32_t HAL_I2C_Request_Data(uint8_t address, uint8_t quantity, uint8_t stop)
         {
             /* Disable Acknowledgement */
             I2C_AcknowledgeConfig(I2C1, DISABLE);
+
+            pulsePin(D7, 5);
 
             /* Send STOP Condition */
             I2C_GenerateSTOP(I2C1, ENABLE);
@@ -226,6 +268,10 @@ uint32_t HAL_I2C_Request_Data(uint8_t address, uint8_t quantity, uint8_t stop)
     rxBufferIndex = 0;
     rxBufferLength = bytesRead;
 
+    if (quantity != bytesRead) {
+        pulsePin(D7, 4);
+    }
+
     return bytesRead;
 }
 
@@ -244,13 +290,19 @@ uint8_t HAL_I2C_End_Transmission(uint8_t stop)
 {
     uint32_t _millis;
 
+    pulsePin(D6, 1);
+
     /* Send START condition */
     I2C_GenerateSTART(I2C1, ENABLE);
 
     _millis = HAL_Timer_Get_Milli_Seconds();
     while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT))
     {
-        if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) return 4;
+        if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) {
+            pulsePin(D6, 2);
+            //HAL_I2C_SoftwareReset();
+            return 4;
+        }
     }
 
     /* Send Slave address for write */
@@ -264,12 +316,14 @@ uint8_t HAL_I2C_End_Transmission(uint8_t stop)
             /* Send STOP Condition */
             //Adding a STOP here is not helping because of STM32 limitation mentioned in ERRATA
             //I2C_GenerateSTOP(I2C1, ENABLE);
+            //HAL_I2C_SoftwareReset();
+            pulsePin(D6, 3);
             return 4;
         }
     }
 
-    uint8_t *pBuffer = txBuffer;
-    uint8_t NumByteToWrite = txBufferLength;
+    volatile uint8_t *pBuffer = txBuffer;
+    volatile uint8_t NumByteToWrite = txBufferLength;
 
     /* While there is data to be written */
     while(NumByteToWrite--)
@@ -283,7 +337,11 @@ uint8_t HAL_I2C_End_Transmission(uint8_t stop)
         _millis = HAL_Timer_Get_Milli_Seconds();
         while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED))
         {
-            if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) return 4;
+            if(EVENT_TIMEOUT < (HAL_Timer_Get_Milli_Seconds() - _millis)) {
+                //HAL_I2C_SoftwareReset();
+                pulsePin(D6, 4);
+                return 4;
+            }
         }
     }
 
@@ -291,6 +349,7 @@ uint8_t HAL_I2C_End_Transmission(uint8_t stop)
     if(stop == true)
     {
         /* Send STOP condition */
+        pulsePin(D6, 5);
         I2C_GenerateSTOP(I2C1, ENABLE);
     }
 
@@ -380,9 +439,28 @@ void HAL_I2C_Set_Callback_On_Request(void (*function)(void))
  */
 void I2C1_ER_irq(void)
 {
+    volatile uint16_t err_status = ((I2C_ReadRegister(I2C1, I2C_Register_SR1) >> 8) & 0x00FF);
+
     /* Read SR1 register to get I2C error */
-    if ((I2C_ReadRegister(I2C1, I2C_Register_SR1) & 0xFF00) != 0x00)
+    if (err_status != 0x00)
     {
+        if (err_status & 0x0001)
+            pulsePin(D5, 1);
+        if (err_status & 0x0002)
+            pulsePin(D5, 2);
+        if (err_status & 0x0004)
+            pulsePin(D5, 3);
+        if (err_status & 0x0008)
+            pulsePin(D5, 4);
+        if (err_status & 0x0010)
+            pulsePin(D5, 5);
+        if (err_status & 0x0020)
+            pulsePin(D5, 6);
+        if (err_status & 0x0040)
+            pulsePin(D5, 7);
+        if (err_status & 0x0080)
+            pulsePin(D5, 8);
+
         /* Clears error flags */
         I2C1->SR1 &= 0x00FF;
     }
@@ -395,6 +473,41 @@ void I2C1_ER_irq(void)
  */
 void I2C1_EV_irq(void)
 {
+    //return;
+
+    /* Process Last I2C Event */
+    switch (I2C_GetLastEvent(I2C1))
+    {
+    /* Check on EV5 */
+    case I2C_EVENT_MASTER_MODE_SELECT:
+        pulsePin(D4, 1);
+        break;
+    /* Check on EV6 */
+    case I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED:
+        pulsePin(D4, 2);
+        break;
+    /* Check on EV7 */
+    case I2C_EVENT_MASTER_BYTE_RECEIVED:
+        pulsePin(D4, 3);
+        break;
+    /* Check on EV8 */
+    case I2C_EVENT_MASTER_BYTE_TRANSMITTING:
+        pulsePin(D4, 4);
+        break;
+    /* Check on EV8_2 */
+    case I2C_EVENT_MASTER_BYTE_TRANSMITTED:
+        pulsePin(D4, 5);
+        break;
+    /* Check on EV8_2 */
+    case I2C_EVENT_MASTER_MODE_ADDRESS10:
+        pulsePin(D4, 6);
+        break;
+
+    default:
+        break;
+    }
+
+#if 0
     /* Process Last I2C Event */
     switch (I2C_GetLastEvent(I2C1))
     {
@@ -457,4 +570,5 @@ void I2C1_EV_irq(void)
     default:
         break;
     }
+#endif
 }
