@@ -1,4 +1,17 @@
 
+## v0.4.7
+
+### FEATURES
+ - [pulseIn(pin, value)](https://docs.particle.io/reference/firmware/photon/#pulsein-) now available for all devices.
+
+### ENHANCEMENTS
+
+ -
+
+### BUGFIXES
+
+ -
+
 ## v0.4.6
 
 ### FEATURES

@@ -208,8 +208,7 @@ int32_t HAL_GPIO_Read(uint16_t pin)
  */
 uint32_t HAL_Pulse_In(pin_t pin, uint16_t value)
 {
-    STM32_Pin_Info* SOLO_PIN_MAP = HAL_Pin_Map();
-    #define pinReadFast(_pin) ((SOLO_PIN_MAP[_pin].gpio_peripheral->IDR & SOLO_PIN_MAP[_pin].gpio_pin) == 0 ? 0 : 1)
+    #define pinReadFast(_pin) ((PIN_MAP[_pin].gpio_peripheral->IDR & PIN_MAP[_pin].gpio_pin) == 0 ? 0 : 1)
 
     volatile uint32_t timeoutStart = SYSTEM_TICK_COUNTER; // total 3 seconds for entire function!
 
