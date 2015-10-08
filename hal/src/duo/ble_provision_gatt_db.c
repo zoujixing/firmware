@@ -1,0 +1,74 @@
+/*
+ * $ Copyright Broadcom Corporation $
+ */
+
+/** @file
+ *
+ * Proximity Reporter Sample Application (GATT Server database)
+ *
+ */
+#include "wiced_bt_gatt.h"
+#include "gattdefs.h"
+#include "sdpdefs.h"
+#include "wiced_bt_cfg.h"
+
+#include "ble_provision.h"
+#include "ble_provision_gatt_db.h"
+
+/* GATT database */
+const uint8_t gatt_db[] =
+{
+    // Generic Attribute service
+    PRIMARY_SERVICE_UUID16 (HDLS_GENERIC_ATTRIBUTE, UUID_SERVCLASS_GATT_SERVER),
+
+    CHARACTERISTIC_UUID16 (HDLC_GENERIC_ATTRIBUTE_SERVICE_CHANGED,
+                           HDLC_GENERIC_ATTRIBUTE_SERVICE_CHANGED_VALUE,
+                           GATT_UUID_GATT_SRV_CHGD,
+                           LEGATTDB_CHAR_PROP_NOTIFY,
+                           LEGATTDB_PERM_NONE),
+
+    // Generic Access service
+    PRIMARY_SERVICE_UUID16 (HDLS_GENERIC_ACCESS, UUID_SERVCLASS_GAP_SERVER),
+
+    CHARACTERISTIC_UUID16 (HDLC_GENERIC_ACCESS_DEVICE_NAME,
+                               HDLC_GENERIC_ACCESS_DEVICE_NAME_VALUE,
+                               GATT_UUID_GAP_DEVICE_NAME,
+                               LEGATTDB_CHAR_PROP_READ,
+                               LEGATTDB_PERM_READABLE),
+
+    CHARACTERISTIC_UUID16 (HDLC_GENERIC_ACCESS_APPEARANCE,
+                           HDLC_GENERIC_ACCESS_APPEARANCE_VALUE,
+                           GATT_UUID_GAP_ICON,
+                           LEGATTDB_CHAR_PROP_READ,
+                           LEGATTDB_PERM_READABLE),
+
+	// Peripheral service and characteristics
+	PRIMARY_SERVICE_UUID128(HDLS_PROVISION, UUID_SERVCLASS_PROVISION),
+
+	CHARACTERISTIC_UUID128_WRITABLE (HDLC_PROVISION_SSID,
+									HDLC_PROVISION_SSID_VALUE,
+									GATT_UUID_PROVISION_SSID,
+									LEGATTDB_CHAR_PROP_WRITE_NO_RESPONSE,
+									LEGATTDB_PERM_WRITE_CMD | LEGATTDB_PERM_READABLE),
+
+	CHARACTERISTIC_UUID128_WRITABLE (HDLC_PROVISION_SECURITY,
+									HDLC_PROVISION_SECURITY_VALUE,
+									GATT_UUID_PROVISION_SECURITY,
+									LEGATTDB_CHAR_PROP_WRITE_NO_RESPONSE,
+									LEGATTDB_PERM_WRITE_CMD | LEGATTDB_PERM_READABLE),
+
+	CHARACTERISTIC_UUID128_WRITABLE (HDLC_PROVISION_PASSWORD,
+									HDLC_PROVISION_PASSWORD_VALUE,
+									GATT_UUID_PROVISION_PASSWORD,
+									LEGATTDB_CHAR_PROP_WRITE_NO_RESPONSE,
+									LEGATTDB_PERM_WRITE_CMD | LEGATTDB_PERM_READABLE),
+
+
+	CHARACTERISTIC_UUID128_WRITABLE (HDLC_PROVISION_ACTION,
+									HDLC_PROVISION_ACTION_VALUE,
+									GATT_UUID_PROVISION_ACTION,
+									LEGATTDB_CHAR_PROP_WRITE_NO_RESPONSE,
+									LEGATTDB_PERM_WRITE_CMD | LEGATTDB_PERM_READABLE),
+};
+
+const uint16_t gatt_db_size = sizeof(gatt_db);
