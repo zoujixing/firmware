@@ -28,25 +28,11 @@ extern "C" {
  * This file is referenced from https://github.com/spark/firmware/wiki/Firmware-Release-Checklist
  */
 
-#define SYSTEM_VERSION_v040  0x00040000
-#define SYSTEM_VERSION_v041  0x00040100
-#define SYSTEM_VERSION_v042  0x00040200
-#define SYSTEM_VERSION_v043  0x00040300
-#define SYSTEM_VERSION_v044  0x00040400
-#define SYSTEM_VERSION_v045  0x00040500
-#define SYSTEM_VERSION_v046  0x00040600
-#define SYSTEM_VERSION_v047  0x00040700
+#define SYSTEM_VERSION_v011  0x00010100
 
-#define SYSTEM_VERSION  SYSTEM_VERSION_v047
+#define SYSTEM_VERSION  SYSTEM_VERSION_v011
 
-#define SYSTEM_VERSION_040
-#define SYSTEM_VERSION_041
-#define SYSTEM_VERSION_042
-#define SYSTEM_VERSION_043
-#define SYSTEM_VERSION_044
-#define SYSTEM_VERSION_045
-#define SYSTEM_VERSION_046
-#define SYSTEM_VERSION_047
+#define SYSTEM_VERSION_011
 
 typedef struct __attribute__((packed)) SystemVersionInfo
 {
