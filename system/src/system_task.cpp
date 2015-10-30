@@ -84,6 +84,10 @@ void manage_serial_flasher()
     {
         system_firmwareUpdate(&Serial);
     }
+    else if(SPARK_FLASH_UPDATE == 4)
+    {
+    	system_avrdudeFirmwareUpdate(&Serial);
+    }
 }
 
 /**

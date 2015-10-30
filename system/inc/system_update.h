@@ -13,10 +13,13 @@ typedef class Stream Stream;
 #include <stdint.h>
 
 typedef bool (*ymodem_serial_flash_update_handler)(Stream *serialObj, FileTransfer::Descriptor& file, void*);
+typedef bool (*avrdude_serial_flash_update_handler)(Stream *serialObj, FileTransfer::Descriptor& file, void*);
 void set_ymodem_serial_flash_update_handler(ymodem_serial_flash_update_handler handler);
+void set_avrdude_serial_flash_update_handle(avrdude_serial_flash_update_handler handler);
 
 void set_start_dfu_flasher_serial_speed(uint32_t speed);
 void set_start_ymodem_flasher_serial_speed(uint32_t speed);
+void set_start_avrdude_flasher_serial_speed(uint32_t speed);
 
 /**
  * Updates firmware via ymodem from a given stream.
@@ -24,7 +27,7 @@ void set_start_ymodem_flasher_serial_speed(uint32_t speed);
  * @return true on successful update.
  */
 bool system_firmwareUpdate(Stream* stream, void* reserved=NULL);
-
+bool system_avrdudeFirmwareUpdate(Stream* stream, void* reserved=NULL);
 
 struct system_file_transfer_t {
     system_file_transfer_t() {
@@ -41,6 +44,8 @@ struct system_file_transfer_t {
 STATIC_ASSERT(system_file_transfer_size, sizeof(system_file_transfer_t)==sizeof(FileTransfer::Descriptor)+8 || sizeof(void*)!=4);
 
 bool system_fileTransfer(system_file_transfer_t* transfer, void* reserved=NULL);
+
+bool system_avrdudeFileTransfer(system_file_transfer_t* tx, void* reserved=NULL);
 
 void system_lineCodingBitRateHandler(uint32_t bitrate);
 
