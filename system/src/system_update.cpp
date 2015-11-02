@@ -30,7 +30,9 @@
 #include "system_cloud_internal.h"
 #include "system_network.h"
 #include "system_ymodem.h"
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 #include "system_avrdude.h"
+#endif
 #include "system_task.h"
 #include "rgbled.h"
 #include "module_info.h"
@@ -47,12 +49,15 @@ static uint32_t start_dfu_flasher_serial_speed = START_DFU_FLASHER_SERIAL_SPEED;
 #ifdef START_YMODEM_FLASHER_SERIAL_SPEED
 static uint32_t start_ymodem_flasher_serial_speed = START_YMODEM_FLASHER_SERIAL_SPEED;
 #endif
-#ifdef START_AVRDUDE_FLASHER_SERIAL_SPEED
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 static uint32_t start_avrdude_flasher_serial_speed  = START_AVRDUDE_FLASHER_SERIAL_SPEED;
 #endif
 
 ymodem_serial_flash_update_handler Ymodem_Serial_Flash_Update_Handler = NULL;
+
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 avrdude_serial_flash_update_handler Avrdude_Serial_Flash_Update_Handler = NULL;
+#endif
 
 volatile uint8_t SPARK_CLOUD_CONNECT = 1; //default is AUTOMATIC mode
 volatile uint8_t SPARK_CLOUD_SOCKETED;
@@ -103,10 +108,12 @@ void set_ymodem_serial_flash_update_handler(ymodem_serial_flash_update_handler h
     Ymodem_Serial_Flash_Update_Handler = handler;
 }
 
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 void set_avrdude_serial_flash_update_handle(avrdude_serial_flash_update_handler handler)
 {
-	Avrdude_Serial_Flash_Update_Handler = handler;
+    Avrdude_Serial_Flash_Update_Handler = handler;
 }
+#endif
 
 void set_start_dfu_flasher_serial_speed(uint32_t speed)
 {
@@ -122,12 +129,12 @@ void set_start_ymodem_flasher_serial_speed(uint32_t speed)
 #endif
 }
 
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 void set_start_avrdude_flasher_serial_speed(uint32_t speed)
 {
-#ifdef START_AVRDUDE_FLASHER_SERIAL_SPEED
-	start_avrdude_flasher_serial_speed = speed;
-#endif
+    start_avrdude_flasher_serial_speed = speed;
 }
+#endif
 
 bool system_firmwareUpdate(Stream* stream, void* reserved)
 {
@@ -168,36 +175,37 @@ bool system_fileTransfer(system_file_transfer_t* tx, void* reserved)
     return status;
 }
 
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
 bool system_avrdudeFileTransfer(system_file_transfer_t* tx, void* reserved)
 {
-	bool status = false;
-	Stream* serialObj = tx->stream;
+    bool status = false;
+    Stream* serialObj = tx->stream;
 
-	if (NULL != Avrdude_Serial_Flash_Update_Handler)
-	{
-		status = Avrdude_Serial_Flash_Update_Handler(serialObj, tx->descriptor, NULL);
-		SPARK_FLASH_UPDATE = 0;
-		TimingFlashUpdateTimeout = 0;
+    if (NULL != Avrdude_Serial_Flash_Update_Handler)
+    {
+        status = Avrdude_Serial_Flash_Update_Handler(serialObj, tx->descriptor, NULL);
+        SPARK_FLASH_UPDATE = 0;
+        TimingFlashUpdateTimeout = 0;
 
-		if (status == true)
-		{
-			if (tx->descriptor.store==FileTransfer::Store::FIRMWARE) {
-				serialObj->println("Restarting system to apply firmware update...");
-				HAL_Delay_Milliseconds(100);
-				HAL_Core_System_Reset();
-			}
-		}
-		else
-		{
-			serialObj->println("Firmware update fail");
-		}
-	}
-	else
-	{
-		serialObj->println("Firmware update using this terminal is not supported!");
-		serialObj->println("Add #include \"Ymodem/Ymodem.h\" to your sketch and try again.");
-	}
-	return status;
+        if (status == true)
+        {
+            if (tx->descriptor.store==FileTransfer::Store::FIRMWARE) {
+                //serialObj->println("Restarting system to apply firmware update...");
+                HAL_Delay_Milliseconds(100);
+                HAL_Core_System_Reset();
+            }
+        }
+        else
+        {
+            //serialObj->println("Firmware update fail");
+        }
+    }
+    else
+    {
+        //serialObj->println("Firmware update using this terminal is not supported!");
+        //serialObj->println("Add #include \"Ymodem/Ymodem.h\" to your sketch and try again.");
+    }
+    return status;
 }
 
 bool system_avrdudeFirmwareUpdate(Stream* stream, void* reserved)
@@ -207,6 +215,7 @@ bool system_avrdudeFirmwareUpdate(Stream* stream, void* reserved)
     tx.stream = stream;
     return system_avrdudeFileTransfer(&tx);
 }
+#endif
 
 void system_lineCodingBitRateHandler(uint32_t bitrate)
 {
@@ -228,7 +237,7 @@ void system_lineCodingBitRateHandler(uint32_t bitrate)
         TimingFlashUpdateTimeout = 0;
     }
 #endif
-#ifdef START_AVRDUDE_FLASHER_SERIAL_SPEED
+#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
     if(!network_listening(0, 0, NULL) && bitrate == start_avrdude_flasher_serial_speed)
     {
         set_avrdude_serial_flash_update_handle(Avrdude_Serial_Flash_Update);

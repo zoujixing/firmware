@@ -28,7 +28,9 @@ extern "C" {
 typedef struct Stream Stream;
 #include <stdint.h>
 
+#if (PLATFORM_ID==88)
 bool Avrdude_Serial_Flash_Update(Stream *serialObj, FileTransfer::Descriptor& desc, void*);
+#endif
 
 #ifdef __cplusplus
 }
