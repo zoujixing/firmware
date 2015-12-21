@@ -30,8 +30,11 @@
 #include "system_cloud_internal.h"
 #include "system_network.h"
 #include "system_ymodem.h"
-#if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
+#if (PLATFORM_ID==88) 
+#include "hw_config.h"
+#ifdef START_AVRDUDE_FLASHER_SERIAL_SPEED
 #include "system_avrdude.h"
+#endif
 #endif
 #include "system_task.h"
 #include "rgbled.h"
@@ -237,12 +240,22 @@ void system_lineCodingBitRateHandler(uint32_t bitrate)
         TimingFlashUpdateTimeout = 0;
     }
 #endif
+#if (PLATFORM_ID==88) && defined (RESET_AVRDUDE_FLASHER_SERIAL_SPEED)
+    if((bitrate == RESET_AVRDUDE_FLASHER_SERIAL_SPEED) && (HAL_Timer_Get_Milli_Seconds() > 5000) ) // Delay to skip the plug-in trigged interrupt
+    {
+        EXTRA_SYSTEM_FLAG(arduino_upload) = 0xAABB;
+        Save_ExtraSystemFlags();
+
+        USB_Cable_Config(DISABLE);
+        NVIC_SystemReset();
+    }
+#endif
 #if (PLATFORM_ID==88) && defined (START_AVRDUDE_FLASHER_SERIAL_SPEED)
-    if(!network_listening(0, 0, NULL) && bitrate == start_avrdude_flasher_serial_speed)
+    if(bitrate == start_avrdude_flasher_serial_speed)
     {
         set_avrdude_serial_flash_update_handle(Avrdude_Serial_Flash_Update);
         RGB.control(true);
-        RGB.color(RGB_COLOR_YELLOW);
+        RGB.color(RGB_COLOR_MAGENTA);
         SPARK_FLASH_UPDATE = 4;
         TimingFlashUpdateTimeout = 0;
     }
