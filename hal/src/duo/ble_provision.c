@@ -38,6 +38,10 @@
 #include "deviceid_hal.h"
 #include "flash_access.h"
 #include "spark_macros.h"
+#include "gpio_hal.h"
+#include "core_hal.h"
+#include "core_hal_stm32f2xx.h"
+#include "hci_usart_hal.h"
 
 /******************************************************
  *                      Macros
@@ -119,7 +123,7 @@ static wiced_result_t ble_provision_scan_result_handler(wiced_scan_handler_resul
  ******************************************************/
 
 /* BLE connect variable */
-static uint16_t 	connect_id;
+static uint16_t 	connect_id = 0x0000;
 static GapStatus  	connect_status = GapStatus_Disconnect;
 
 /* GATT attrIbute values */
@@ -140,43 +144,57 @@ static uint8_t scan_record_cnt = 0;
 static uint8_t configured_ap_idx = 0xFF;
 static uint8_t provision_status = BLE_PROVISION_STATUS_IDLE;
 
+const unsigned USART6_Index = 87;
+
 /* Stack and buffer pool configuration tables */
 extern wiced_bt_cfg_settings_t wiced_bt_cfg_settings;
 
+extern char link_interrupt_vectors_location;
+extern char link_ram_interrupt_vectors_location;
+extern char link_ram_interrupt_vectors_location_end;
 
+extern void bt_uart_irq(void);
 /******************************************************
  *               Function Definitions
  ******************************************************/
 /* Initialize peripheral */
 void ble_provision_init(void)
 {
-	static bool gatt_db_init_done = false;
+    HAL_Pin_Mode(BT_RTS, OUTPUT);
+    HAL_GPIO_Write(BT_RTS, 1);
+    wiced_rtos_delay_milliseconds(50);
+    HAL_HCI_USART_registerReceiveHandler(NULL);
+    HAL_HCI_USART_End(HAL_HCI_USART_SERIAL6);
 
-	if(!gatt_db_init_done)
-	{
-		bt_stack_init();
+    uint32_t* isrs = (uint32_t*)&link_ram_interrupt_vectors_location;
+    isrs[USART6_Index] = (uint32_t)bt_uart_irq;
 
-		wiced_bt_ble_advert_data_t adv_data;
-		wiced_bt_ble_128service_t  service;
+    HAL_Pin_Mode(BT_POWER, OUTPUT);
+    HAL_GPIO_Write(BT_POWER, 0);
+    wiced_rtos_delay_milliseconds(100);
+    HAL_GPIO_Write(BT_POWER, 1);
+    wiced_rtos_delay_milliseconds(100);
 
-		uint8_t buf[16] = { UUID_SERVCLASS_BLE_PROVISION };
+	bt_stack_init();
 
-		/* Set advertising data: device name and discoverable flag */
-		service.list_cmpl = WICED_TRUE;
-		memcpy(service.uuid128, buf, MAX_UUID_SIZE);
-		adv_data.flag = 0x06;
-		adv_data.p_services_128b = &service;
+	wiced_bt_ble_advert_data_t adv_data;
+	wiced_bt_ble_128service_t  service;
 
-		wiced_bt_ble_set_advertisement_data(BTM_BLE_ADVERT_BIT_FLAGS|BTM_BLE_ADVERT_BIT_SERVICE_128, &adv_data);
+	uint8_t buf[16] = { UUID_SERVCLASS_BLE_PROVISION };
 
-		/* Register for gatt event notifications */
-		wiced_bt_gatt_register(&ble_provision_gatt_cback);
+	/* Set advertising data: device name and discoverable flag */
+	service.list_cmpl = WICED_TRUE;
+	memcpy(service.uuid128, buf, MAX_UUID_SIZE);
+	adv_data.flag = 0x06;
+	adv_data.p_services_128b = &service;
 
-		/* Initialize GATT database */
-		wiced_bt_gatt_db_init ((uint8_t *)gatt_db, gatt_db_size);
+	wiced_bt_ble_set_advertisement_data(BTM_BLE_ADVERT_BIT_FLAGS|BTM_BLE_ADVERT_BIT_SERVICE_128, &adv_data);
 
-		gatt_db_init_done = true;
-	}
+	/* Register for gatt event notifications */
+	wiced_bt_gatt_register(&ble_provision_gatt_cback);
+
+	/* Initialize GATT database */
+	wiced_bt_gatt_db_init ((uint8_t *)gatt_db, gatt_db_size);
 
 	provision_status = BLE_PROVISION_STATUS_IDLE;
 	configured_ap_idx = 0xFF;
@@ -194,11 +212,20 @@ void ble_provision_loop(void)
 
 void ble_provision_finalize(void)
 {
-	provision_status = BLE_PROVISION_STATUS_CONNECTED;
+    provision_status = BLE_PROVISION_STATUS_CONNECTED;
 
-	ble_provision_send_ip_config();
+    if(connect_id != 0x0000)
+    {
+        ble_provision_send_ip_config();
 
-	wiced_bt_gatt_disconnect(connect_id);
+        wiced_bt_gatt_disconnect(connect_id);
+    }
+
+    wiced_rtos_delay_milliseconds( 500 );
+
+    USB_Cable_Config(DISABLE);
+
+    HAL_Core_System_Reset();
 }
 
 static void ble_provision_notify( uint16_t attr_handle, uint8_t len, uint8_t *pbuf)
