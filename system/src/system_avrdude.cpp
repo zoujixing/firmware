@@ -15,7 +15,7 @@
 #include "spi_flash.h"
 
 static Stream *avrdudeSeial = NULL;
-static uint32_t NAK_TIMEOUT = (0x10000000);
+static uint32_t NAK_TIMEOUT = (5000);
 
 static uint8_t rx_tx_buf[160];
 
@@ -27,7 +27,8 @@ static uint32_t computedCRC, rawCRC, remainder_len;
 
 static int32_t Avrdude_recieve_byte(uint8_t& c, uint32_t timeout)
 {
-    while (timeout-- > 0)
+    uint32_t start = HAL_Timer_Get_Milli_Seconds();
+    while (HAL_Timer_Get_Milli_Seconds()-start <= timeout)
     {
         if (avrdudeSeial->available())
         {
