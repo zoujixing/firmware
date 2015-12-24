@@ -116,7 +116,11 @@ bool HAL_OTA_CheckValidAddressRange(uint32_t startAddress, uint32_t length)
     uint32_t endAddress = startAddress + length;
 
 #ifdef USE_SERIAL_FLASH
+#if PLATFORM_ID == PLATFORM_DUO_PRODUCTION
+    if (startAddress == EXTERNAL_FLASH_OTA_ADDRESS && endAddress <= 0x200000)
+#else
     if (startAddress == EXTERNAL_FLASH_OTA_ADDRESS && endAddress <= 0x100000)
+#endif
     {
         return true;
     }
@@ -164,23 +168,6 @@ int HAL_FLASH_Update(const uint8_t *pBuffer, uint32_t address, uint32_t length, 
 
 hal_update_complete_t HAL_FLASH_End(void* reserved)
 {
-#if PLATFORM_ID == PLATFORM_DUO_PRODUCTION
-	hal_update_complete_t result = HAL_UPDATE_ERROR;
-
-	if(FLASH_AddToNextAvailableModulesSlot(\
-		FLASH_SERIAL, (uint32_t)EXTERNAL_FLASH_OTA_ADDRESS,\
-		FLASH_INTERNAL, (uint32_t)(USER_FIRMWARE_IMAGE_LOCATION),\
-		FIRMWARE_IMAGE_SIZE,\
-		MODULE_FUNCTION_USER_PART,\
-		MODULE_VERIFY_CRC|MODULE_VERIFY_DESTINATION_IS_START_ADDRESS|MODULE_VERIFY_FUNCTION))
-	{
-		result = HAL_UPDATE_APPLIED_PENDING_RESTART;
-	}
-
-	FLASH_End();
-
-	return result;
-#else
     hal_module_t module;
     hal_update_complete_t result = HAL_UPDATE_ERROR;
 
@@ -198,7 +185,12 @@ hal_update_complete_t HAL_FLASH_End(void* reserved)
         }
         else
         {
-            if (FLASH_AddToNextAvailableModulesSlot(FLASH_INTERNAL, module_ota.start_address,
+#if PLATFORM_ID == PLATFORM_DUO_PRODUCTION
+            flash_device_t flash_device = FLASH_SERIAL;
+#else
+            flash_device_t flash_device = FLASH_INTERNAL;
+#endif
+            if (FLASH_AddToNextAvailableModulesSlot(flash_device, module_ota.start_address,
                 FLASH_INTERNAL, uint32_t(module.info->module_start_address),
                 (moduleLength + 4),//+4 to copy the CRC too
                 function,
@@ -215,7 +207,6 @@ hal_update_complete_t HAL_FLASH_End(void* reserved)
     		WARN("OTA module not applied");
     }
     return result;
-#endif
 }
 
 void copy_dct(void* target, uint16_t offset, uint16_t length) {
