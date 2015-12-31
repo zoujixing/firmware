@@ -158,7 +158,7 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
 
             if(rw_flag == 1)
             {   // The page of external flash is 4096.
-                if((currentAddr & 0x00000FFF) == 0)
+                if((invalid_flag!=1) && ((currentAddr & 0x00000FFF)==0))
                     HAL_FLASH_Begin(currentAddr, 8192, NULL);
             }
 
