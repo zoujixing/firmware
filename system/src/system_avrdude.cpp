@@ -139,7 +139,6 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
                     RGB.control(true);
                     RGB.color(RGB_COLOR_MAGENTA);
                     SPARK_FLASH_UPDATE = 1;
-                    TimingFlashUpdateTimeout = 0;
                 }
                 else if(rw_flag == 1)
                 {
@@ -159,8 +158,9 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
             if(rw_flag == 1)
             {   // The page of external flash is 4096.
                 if((invalid_flag!=1) && ((currentAddr & 0x00000FFF)==0))
-                    HAL_FLASH_Begin(currentAddr, 8192, NULL);
+                    HAL_FLASH_Begin(currentAddr, 4096, NULL);
             }
+            TimingFlashUpdateTimeout = 0;
 
             avrdudeSeial->write((uint8_t)'\r');
             break;
@@ -251,7 +251,7 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
             block_size = (block_size<<8) + buf[1];
 
             if(buf[2] == 'F')
-            {    // Write external flash
+            {   // Write external flash
                 uint32_t index;
 
                 memset(rx_tx_buf, 0x00, block_size);
@@ -288,7 +288,7 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
                     else
                     {
                         uint32_t receive_len = firmware_size-recieve_size;
-
+                        uint32_t temp_addr = currentAddr + block_size;
                         if(recieve_size+block_size >= firmware_size+4)
                         {    // This block contains 4bytes-CRC32.
                             raw_crc = rx_tx_buf[receive_len];
@@ -313,6 +313,9 @@ int32_t receive_firmware(FileTransfer::Descriptor& file)
 
                         currentAddr  += receive_len;
                         recieve_size += receive_len;
+                        // Check whether erase next page.
+                        if(temp_addr % 4096 == 0)
+                        	HAL_FLASH_Begin(temp_addr, 4096, NULL);
                         // Calculate CRC32.
                         computed_crc = sFLASH_Compute_CRC32((HAL_OTA_FlashAddress()), recieve_size);
                         uint8_t buf[4];
