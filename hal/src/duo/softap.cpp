@@ -23,6 +23,10 @@
 #include "http_server.h"
 #endif
 
+#if PLATFORM_ID == 88
+#define SOFTAP_OTA_SERVER
+#endif
+
 int resolve_dns_query(const char* query, const char* table)
 {
     int result = 0;
@@ -713,7 +717,80 @@ protected:
 const char* const SetValueCommand::KEY[2] = { "k", "v" };
 const jsmntype_t SetValueCommand::TYPE[2] = { JSMN_STRING, JSMN_STRING };
 
+#ifdef SOFTAP_OTA_SERVER
+
+struct FileInfo {
+    uint32_t file_length;
+    uint32_t chunk_address;
+    uint16_t chunk_size;
+};
+
+class PrepareUpdateCommand  : public JSONRequestCommand {
+    static const char* const KEY[3];
+    static const int OFFSET[];
+    static const jsmntype_t TYPE[];
+
+    FileInfo fileinfo;
+
+    void (*ota_begin_callback_)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address);
+
+public:
+    PrepareUpdateCommand(void (*ota_begin_callback)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address)) {
+        ota_begin_callback_ = ota_begin_callback;
+    }
+
+protected:
+
+    virtual bool parsed_key(unsigned index) {
+        return true;
+    }
+
+    virtual bool parsed_value(unsigned key, jsmntok_t* t, char* str) {
+        void *data = ((uint8_t*)&fileinfo)+OFFSET[key];
+
+        if (!data) {
+            return false;
+        }
+
+        if(key == 0 || key == 1)
+        {
+            *(uint32_t *)data = (uint32_t)atoi(str);
+        }
+        else if(key == 2)
+        {
+            *(uint16_t *)data = (uint16_t)atoi(str);
+        }
+
+        return true;
+    }
+
+    int parse_request(Reader& reader) {
+        memset(&fileinfo, 0, sizeof(fileinfo));
+        return parse_json_request(reader, KEY, TYPE, arraySize(KEY));
+    }
+
+    int process() {
+        if(ota_begin_callback_!=NULL)
+        {
+            ota_begin_callback_(fileinfo.file_length, fileinfo.chunk_size, fileinfo.chunk_address);
+        }
+        return true;
+    }
+};
+
+const char* const PrepareUpdateCommand::KEY[3] = { "file_length", "chunk_address", "chunk_size"};
+const int PrepareUpdateCommand::OFFSET[] = {
+                            offsetof(FileInfo, file_length),
+                            offsetof(FileInfo, chunk_address),
+                            offsetof(FileInfo, chunk_size)
+};
+const jsmntype_t PrepareUpdateCommand::TYPE[3] = { JSMN_PRIMITIVE, JSMN_PRIMITIVE, JSMN_PRIMITIVE};
+#endif
+
 struct AllSoftAPCommands {
+#ifdef SOFTAP_OTA_SERVER
+    PrepareUpdateCommand prepareUpdate;
+#endif
     VersionCommand version;
     DeviceIDCommand deviceID;
     ScanAPCommand scanAP;
@@ -722,6 +799,9 @@ struct AllSoftAPCommands {
     PublicKeyCommand publicKey;
     SetValueCommand setValue;
     AllSoftAPCommands(wiced_semaphore_t* complete, void (*softap_complete)()) :
+#ifdef SOFTAP_OTA_SERVER
+        prepareUpdate(Wireless_Update_Begin),
+#endif
         connectAP(complete, softap_complete) {}
 };
 
@@ -1116,6 +1196,10 @@ class SimpleProtocolDispatcher
                 cmd = &commands_.publicKey;
             else if (!strcmp("set", name))
                 cmd = &commands_.setValue;
+#ifdef SOFTAP_OTA_SERVER
+            else if (!strcmp("prepare-update", name))
+                cmd = &commands_.prepareUpdate;
+#endif
             else if (!strcmp("ant-internal", name))
                 wwd_wifi_select_antenna(WICED_ANTENNA_1);
             else if (!strcmp("ant-external", name))
@@ -1376,6 +1460,97 @@ public:
 
 TCPServerDispatcher*  TCPServerDispatcher::static_server = NULL;
 
+#ifdef SOFTAP_OTA_SERVER
+
+class OTAServerDispatcher
+{
+    wiced_interface_t           iface_;
+
+    static void (*ota_update_callback_)(uint8_t *data, uint16_t length);
+
+    static wiced_tcp_server_t   ota_server_;
+
+    static wiced_result_t ota_connect_callback(wiced_tcp_socket_t* socket, void* arg) {
+        return wiced_tcp_server_accept(&ota_server_, socket);
+    }
+
+    static wiced_result_t ota_disconnect_callback(wiced_tcp_socket_t* socket, void* arg) {
+        return wiced_tcp_server_disconnect_socket(&ota_server_, socket);
+    }
+
+    static wiced_result_t ota_receive_callback(wiced_tcp_socket_t* socket, void* arg) {
+        wiced_result_t      result;
+        wiced_packet_t*     rx_packet = NULL;
+        char*               request;
+        uint16_t            request_length;
+        uint16_t            available_data_length;
+        wiced_packet_t*     tx_packet;
+        char*               tx_data;
+        uint8_t             tx_data_len;
+        const char*         rsp = "chunk saved";
+
+        result = wiced_tcp_receive( socket, &rx_packet, WICED_WAIT_FOREVER );
+        if ( result != WICED_SUCCESS )
+        {
+            return result;
+        }
+
+        wiced_packet_get_data( rx_packet, 0, (uint8_t**)&request, &request_length, &available_data_length );
+
+        // Handle the received data
+        if(ota_update_callback_!=NULL)
+        {
+            ota_update_callback_((uint8_t*)request, request_length);
+        }
+
+        // Echo respond
+        if ( wiced_packet_create_tcp( socket, 30, &tx_packet, (uint8_t**)&tx_data, &available_data_length ) != WICED_SUCCESS )
+        {
+            return WICED_ERROR;
+        }
+
+        tx_data_len = strlen(rsp);
+        tx_data[tx_data_len] = '\x0';
+        memcpy( tx_data, rsp, tx_data_len);
+        wiced_packet_set_data_end( tx_packet, (uint8_t*)tx_data + tx_data_len );
+
+        result = wiced_tcp_send_packet( socket, tx_packet );
+        if ( result != WICED_SUCCESS )
+        {
+            wiced_packet_delete( tx_packet );
+        }
+
+        /* Release a packet */
+        wiced_packet_delete( rx_packet );
+
+        return WICED_SUCCESS;
+    }
+
+public:
+
+    OTAServerDispatcher(wiced_interface_t iface, void (*ota_update_callback)(uint8_t *data, uint16_t length))
+        : iface_(iface)
+    {
+        memset(&ota_server_, 0, sizeof(ota_server_));
+        ota_update_callback_ = ota_update_callback;
+    }
+
+    void start()
+    {
+        wiced_tcp_server_start(&ota_server_, iface_, 50007, 1, ota_connect_callback, ota_receive_callback, ota_disconnect_callback, NULL);
+    }
+
+    void stop()
+    {
+        wiced_tcp_server_stop(&ota_server_);
+    }
+};
+
+wiced_tcp_server_t  OTAServerDispatcher::ota_server_;
+void (*OTAServerDispatcher::ota_update_callback_)(uint8_t *data, uint16_t length) = NULL;
+
+#endif // #ifdef SOFTAP_OTA_SERVER
+
 /**
  * The SoftAP setup application. This co-ordinates the various dispatchers and the soft AP.
  */
@@ -1388,6 +1563,9 @@ class SoftAPApplication
 #endif
     SimpleProtocolDispatcher simpleProtocol;
     TCPServerDispatcher tcpServer;
+#ifdef SOFTAP_OTA_SERVER
+    OTAServerDispatcher otaServer;
+#endif
     SerialDispatcher serial;
 
 public:
@@ -1398,11 +1576,17 @@ public:
 #endif
             simpleProtocol(commands),
             tcpServer(simpleProtocol, WICED_AP_INTERFACE),
+#ifdef SOFTAP_OTA_SERVER
+            otaServer(WICED_AP_INTERFACE, Wireless_Update_Save_Chunk),
+#endif
             serial(simpleProtocol)
     {
         softAP.start();
         serial.start();
         tcpServer.start();
+#ifdef SOFTAP_OTA_SERVER
+        otaServer.start();
+#endif
 #if SOFTAP_HTTP
         http.start();
 #endif
@@ -1414,6 +1598,9 @@ public:
         http.stop();
 #endif
         tcpServer.stop();
+#ifdef SOFTAP_OTA_SERVER
+        otaServer.stop();
+#endif
         serial.stop();
         softAP.stop();
     }

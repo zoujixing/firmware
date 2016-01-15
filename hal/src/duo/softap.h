@@ -35,6 +35,11 @@ extern "C" {
         uint16_t passwordLen, wiced_security_t security, unsigned channel);
 
     size_t hex_decode(uint8_t* buf, size_t len, const char* hex);
+	
+#if PLATFORM_ID == 88
+    void Wireless_Update_Begin(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address);
+    void Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length);
+#endif
 
 #ifdef	__cplusplus
 }
