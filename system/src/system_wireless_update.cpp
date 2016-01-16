@@ -44,6 +44,7 @@ void Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length)
 
     if(recieved_size >= fd.file_length)
     {
+        ota_init = false;
         Spark_Finish_Firmware_Update(fd, recieved_size>0 ? 1 : 0, NULL);
     }
 }
