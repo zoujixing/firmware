@@ -188,7 +188,10 @@ void ble_provision_init(void)
 	adv_data.flag = 0x06;
 	adv_data.p_services_128b = &service;
 
-	wiced_bt_ble_set_advertisement_data(BTM_BLE_ADVERT_BIT_FLAGS|BTM_BLE_ADVERT_BIT_SERVICE_128, &adv_data);
+	wiced_bt_ble_set_advertisement_data(BTM_BLE_ADVERT_BIT_FLAGS|BTM_BLE_ADVERT_BIT_SERVICE_128|BTM_BLE_ADVERT_BIT_DEV_NAME, &adv_data);
+	
+    /* Enable privacy */
+    wiced_bt_ble_enable_privacy( TRUE );
 
 	/* Register for gatt event notifications */
 	wiced_bt_gatt_register(&ble_provision_gatt_cback);
