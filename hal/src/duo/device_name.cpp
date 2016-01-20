@@ -8,9 +8,12 @@ extern "C" {
 
 extern bool fetch_or_generate_setup_ssid(wiced_ssid_t* SSID);
 
-void HAL_Device_Name(device_name_t *dev_name)
+void HAL_Local_Name(local_name_t *local_name)
 {
-    fetch_or_generate_setup_ssid( (wiced_ssid_t *)dev_name );
+	wiced_ssid_t ssid;
+    fetch_or_generate_setup_ssid( &ssid );
+
+    memcpy(local_name, &ssid, sizeof(local_name_t));
 }
 
 #ifdef __cplusplus
