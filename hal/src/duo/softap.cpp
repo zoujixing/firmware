@@ -154,11 +154,17 @@ protected:
 
         unsigned int n = 64;
         jsmntok_t* tokens = (jsmntok_t*)malloc(sizeof(jsmntok_t) * n);
+        if (!tokens) return nullptr;
         int ret = jsmn_parse(&parser, js, strlen(js), tokens, n, NULL);
         while (ret==JSMN_ERROR_NOMEM)
         {
             n = n * 2 + 1;
+            jsmntok_t* prev = tokens;
             tokens = (jsmntok_t*)realloc(tokens, sizeof(jsmntok_t) * n);
+            if (!tokens) {
+                free(prev);
+                return nullptr;
+            }
             ret = jsmn_parse(&parser, js, strlen(js), tokens, n, NULL);
         }
         return tokens;
@@ -263,75 +269,79 @@ protected:
 
     int parse_json_request(Reader& reader, const char* const keys[], const jsmntype_t types[], unsigned count) {
 
+        int result = -1;
         char* js = reader.fetch_as_string();
-        if (!js)
-            return -1;
-
-        jsmntok_t *tokens = json_tokenise(js);
-
-        enum parse_state { START, KEY, VALUE, SKIP, STOP };
-
-        parse_state state = START;
-        jsmntype_t expected_type = JSMN_OBJECT;
-
-        int result = 0;
-        int key = -1;
-
-        for (size_t i = 0, j = 1; j > 0; i++, j--)
+        if (js)
         {
-            jsmntok_t *t = &tokens[i];
-            if (t->type == JSMN_ARRAY || t->type == JSMN_OBJECT)
-                j += t->size * 2;
-
-            switch (state)
+            jsmntok_t *tokens = json_tokenise(js);
+            if (tokens)
             {
-                case START:
-                    state = KEY;
-                    break;
+                enum parse_state { START, KEY, VALUE, SKIP, STOP };
 
-                case KEY:
-                    state = VALUE;
-                    key = -1;
-                    for (size_t i = 0; i < count; i++)
+                parse_state state = START;
+                jsmntype_t expected_type = JSMN_OBJECT;
+
+                result = 0;
+                int key = -1;
+
+                for (size_t i = 0, j = 1; j > 0; i++, j--)
+                {
+                    jsmntok_t *t = &tokens[i];
+                    if (t->type == JSMN_ARRAY || t->type == JSMN_OBJECT)
+                        j += t->size * 2;
+
+                    switch (state)
                     {
-                        if (json_token_streq(js, t, keys[i]))
-                        {
-                            expected_type = types[i];
-                            if (parsed_key(i)) {
-                                key = i;
-                                JSON_DEBUG( ( "key: %s %d %d\n", keys[i], i, (int)expected_type ) );
+                        case START:
+                            state = KEY;
+                            break;
+
+                        case KEY:
+                            state = VALUE;
+                            key = -1;
+                            for (size_t i = 0; i < count; i++)
+                            {
+                                if (json_token_streq(js, t, keys[i]))
+                                {
+                                    expected_type = types[i];
+                                    if (parsed_key(i)) {
+                                        key = i;
+                                        JSON_DEBUG( ( "key: %s %d %d\n", keys[i], i, (int)expected_type ) );
+                                    }
+                                }
                             }
-                        }
-                    }
-                    if (key==-1) {
-                        JSON_DEBUG( ( "unknown key: %s\n", json_token_tostr(js, t) ) );
-                        result = -1;
-                    }
-                    break;
-
-                case VALUE:
-                    if (key!=-1) {
-                        if (t->type != expected_type) {
-                            result = -1;
-                            JSON_DEBUG( ( "type mismatch\n" ) );
-                        }
-                        else {
-                            char *str = json_token_tostr(js, t);
-                            if (!parsed_value(key, t, str))
+                            if (key==-1) {
+                                JSON_DEBUG( ( "unknown key: %s\n", json_token_tostr(js, t) ) );
                                 result = -1;
-                        }
+                            }
+                            break;
+
+                        case VALUE:
+                            if (key!=-1) {
+                                if (t->type != expected_type) {
+                                    result = -1;
+                                    JSON_DEBUG( ( "type mismatch\n" ) );
+                                }
+                                else {
+                                    char *str = json_token_tostr(js, t);
+                                    if (!parsed_value(key, t, str))
+                                        result = -1;
+                                }
+                            }
+                            state = KEY;
+                            break;
+
+                        case STOP: // Just consume the tokens
+                            break;
+
+                        default:
+                            result = -1;
                     }
-                    state = KEY;
-                    break;
-
-                case STOP: // Just consume the tokens
-                    break;
-
-                default:
-                    result = -1;
+                }
+                free(tokens);
             }
+            free(js);
         }
-        free(js);
         return result;
     }
 };
