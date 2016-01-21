@@ -5,7 +5,7 @@ BUILD_PATH_EXT = $(BUILD_TARGET_PLATFORM)
 HAL_LINK :=
 PLATFORM_DFU = 0x8040000
 
-DEPENDENCIES = newlib_nano modules/photon/user-part modules/photon/system-part1 dynalib services services-dynalib hal platform system wiring communication-dynalib communication rt-dynalib
+DEPENDENCIES = newlib_nano modules/duo/user-part modules/duo/system-part1 dynalib services services-dynalib hal platform system wiring communication-dynalib communication rt-dynalib
 LIB_DEPENDENCIES = services-dynalib system wiring communication-dynalib hal platform
 # newlib_nano is special in that it's linked automatically by the system, so no need to add it to the library path here
 MAKE_DEPENDENCIES = newlib_nano $(LIB_DEPENDENCIES)
