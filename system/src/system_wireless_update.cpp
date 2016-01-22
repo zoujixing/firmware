@@ -1,8 +1,4 @@
 
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __LIB_AVRDUDE_H
-#define __LIB_AVRDUDE_H
-
 #if (PLATFORM_ID==88)
 
 #include "system_update.h"
@@ -49,6 +45,9 @@ void Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length)
     }
 }
 
-#endif  /* PLATFORM_ID==88 */
+void Wireless_Update_Finish(void)
+{
+    HAL_WLAN_notify_OTA_update_completed();
+}
 
-#endif  /* __LIB_AVRDUDE_H */
+#endif  /* PLATFORM_ID==88 */

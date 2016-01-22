@@ -795,11 +795,33 @@ const int PrepareUpdateCommand::OFFSET[] = {
                             offsetof(FileInfo, chunk_size)
 };
 const jsmntype_t PrepareUpdateCommand::TYPE[3] = { JSMN_PRIMITIVE, JSMN_PRIMITIVE, JSMN_PRIMITIVE};
+
+
+class FinishUpdateCommand : public JSONCommand {
+
+    void (*ota_finish_callback_)(void);
+
+public:
+    FinishUpdateCommand(void (*ota_finish_callback)(void)) {
+        ota_finish_callback_ = ota_finish_callback;
+    }
+
+protected:
+
+    int process() {
+        if(ota_finish_callback_!=NULL)
+        {
+            ota_finish_callback_();
+        }
+        return true;
+    }
+};
 #endif
 
 struct AllSoftAPCommands {
 #ifdef SOFTAP_OTA_SERVER
     PrepareUpdateCommand prepareUpdate;
+    FinishUpdateCommand finishUpdate;
 #endif
     VersionCommand version;
     DeviceIDCommand deviceID;
@@ -811,6 +833,7 @@ struct AllSoftAPCommands {
     AllSoftAPCommands(wiced_semaphore_t* complete, void (*softap_complete)()) :
 #ifdef SOFTAP_OTA_SERVER
         prepareUpdate(Wireless_Update_Begin),
+        finishUpdate(Wireless_Update_Finish),
 #endif
         connectAP(complete, softap_complete) {}
 };
@@ -1209,6 +1232,8 @@ class SimpleProtocolDispatcher
 #ifdef SOFTAP_OTA_SERVER
             else if (!strcmp("prepare-update", name))
                 cmd = &commands_.prepareUpdate;
+            else if (!strcmp("finish-update", name))
+                cmd = &commands_.finishUpdate;
 #endif
             else if (!strcmp("ant-internal", name))
                 wwd_wifi_select_antenna(WICED_ANTENNA_1);
