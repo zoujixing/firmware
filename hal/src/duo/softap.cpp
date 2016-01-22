@@ -1501,7 +1501,7 @@ class OTAServerDispatcher
 {
     wiced_interface_t           iface_;
 
-    static void (*ota_update_callback_)(uint8_t *data, uint16_t length);
+    static uint8_t (*ota_update_callback_)(uint8_t *data, uint16_t length);
 
     static wiced_tcp_server_t   ota_server_;
 
@@ -1522,7 +1522,8 @@ class OTAServerDispatcher
         wiced_packet_t*     tx_packet;
         char*               tx_data;
         uint8_t             tx_data_len;
-        const char*         rsp = "chunk saved";
+        char                rsp[20];
+        uint8_t             status = 0;
 
         result = wiced_tcp_receive( socket, &rx_packet, WICED_WAIT_FOREVER );
         if ( result != WICED_SUCCESS )
@@ -1535,7 +1536,7 @@ class OTAServerDispatcher
         // Handle the received data
         if(ota_update_callback_!=NULL)
         {
-            ota_update_callback_((uint8_t*)request, request_length);
+            status = ota_update_callback_((uint8_t*)request, request_length);
         }
 
         // Echo respond
@@ -1543,6 +1544,13 @@ class OTAServerDispatcher
         {
             return WICED_ERROR;
         }
+		
+        if(status == 0)
+            memcpy(rsp, "chunk saved", 12);
+        else if(status == 1)
+            memcpy(rsp, "file saved", 11);
+        else
+            memcpy(rsp, "not init", 9);
 
         tx_data_len = strlen(rsp);
         tx_data[tx_data_len] = '\x0';
@@ -1563,7 +1571,7 @@ class OTAServerDispatcher
 
 public:
 
-    OTAServerDispatcher(wiced_interface_t iface, void (*ota_update_callback)(uint8_t *data, uint16_t length))
+    OTAServerDispatcher(wiced_interface_t iface, uint8_t (*ota_update_callback)(uint8_t *data, uint16_t length))
         : iface_(iface)
     {
         memset(&ota_server_, 0, sizeof(ota_server_));
@@ -1582,7 +1590,7 @@ public:
 };
 
 wiced_tcp_server_t  OTAServerDispatcher::ota_server_;
-void (*OTAServerDispatcher::ota_update_callback_)(uint8_t *data, uint16_t length) = NULL;
+uint8_t (*OTAServerDispatcher::ota_update_callback_)(uint8_t *data, uint16_t length) = NULL;
 
 #endif // #ifdef SOFTAP_OTA_SERVER
 

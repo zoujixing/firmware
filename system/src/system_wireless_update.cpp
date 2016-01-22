@@ -26,10 +26,10 @@ void Wireless_Update_Begin(uint32_t file_length, uint16_t chunk_size, uint32_t c
 	ota_init = true;
 }
 
-void Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length)
+uint8_t Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length)
 {
     if(!ota_init)
-    	return;
+    	return 2;
 
     fd.chunk_address = fd.file_address + addr_offset;
     fd.chunk_size = length;
@@ -42,7 +42,10 @@ void Wireless_Update_Save_Chunk(uint8_t *data, uint16_t length)
     {
         ota_init = false;
         Spark_Finish_Firmware_Update(fd, recieved_size>0 ? 1 : 0, NULL);
+        return 1;
     }
+	
+    return 0;
 }
 
 void Wireless_Update_Finish(void)
