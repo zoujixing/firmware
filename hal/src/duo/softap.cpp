@@ -350,7 +350,21 @@ class VersionCommand : public JSONCommand {
 
 public:
     void produce_response(Writer& out, int result) {
+#if PLATFORM_ID == 88
+        write_char(out, '{');
+        write_json_string(out, "release string", stringify(SYSTEM_VERSION_STRING));
+        write_char(out, ',');
+        write_json_int(out, "bootloader", FLASH_ModuleVersion(FLASH_INTERNAL, 0x08000000));
+        write_char(out, ',');
+        write_json_int(out, "system part1", FLASH_ModuleVersion(FLASH_INTERNAL, 0x08020000));
+        write_char(out, ',');
+        write_json_int(out, "system part2", FLASH_ModuleVersion(FLASH_INTERNAL, 0x08040000));
+        write_char(out, ',');
+        write_json_int(out, "user part", FLASH_ModuleVersion(FLASH_INTERNAL, 0x080C0000));
+        write_char(out, '}');
+#else
         out.write("{\"v\":2}");
+#endif
     }
 };
 
