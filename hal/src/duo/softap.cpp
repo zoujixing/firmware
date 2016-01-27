@@ -15,6 +15,7 @@
 #include "core_hal.h"
 #include "rng_hal.h"
 #include "ota_flash_hal_stm32f2xx.h"
+#include "flash_access.h"
 
 #if defined(SYSTEM_MINIMAL)
 #define SOFTAP_HTTP 0
