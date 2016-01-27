@@ -1,12 +1,4 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
 
-/** @file
- *
- * Proximity Reporter Sample Application (GATT Server database)
- *
- */
 #include "wiced_bt_gatt.h"
 #include "gattdefs.h"
 #include "sdpdefs.h"

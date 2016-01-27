@@ -1,12 +1,4 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
 
-/** @file
- *
- * Proximity Server Sample Application (GATT Server database definitions)
- *
- */
 #include "wiced.h"
 
 #ifdef __cplusplus

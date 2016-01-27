@@ -1,25 +1,3 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
-
-/** @file
- *
- * BLE Proximity Reporter Sample Application
- *
- * Features demonstrated
- *  - WICED BT GATT server APIs
- *
- * On startup this demo:
- *  - Initializes the GATT subsystem
- *  - Begins advertising
- *  - Waits for GATT clients to connect
- *
- * Application Instructions
- *   Connect a PC terminal to the serial port of the WICED Eval board,
- *   then build and download the application as described in the WICED
- *   Quick Start Guide
- *
- */
 
 #include <string.h>
 #include <stdio.h>

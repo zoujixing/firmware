@@ -1,12 +1,3 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
-
-/** @file
- *
- * Proximity Monitor Sample Application
- *
- */
 
 #ifdef __cplusplus
 extern "C" {
