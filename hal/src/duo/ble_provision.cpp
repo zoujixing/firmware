@@ -4,14 +4,6 @@
 #include <stddef.h>
 #include <string.h>
 #include "wiced.h"
-#include "bt_target.h"
-#include "wiced_bt_dev.h"
-#include "wiced_bt_ble.h"
-#include "wiced_bt_gatt.h"
-#include "wiced_bt_cfg.h"
-#include "ble_provision_gatt_db.h"
-#include "ble_provision.h"
-#include "ble_hal.h"
 #include "wlan_hal.h"
 #include "rgbled.h"
 #include "dct.h"
@@ -22,7 +14,9 @@
 #include "core_hal.h"
 #include "core_hal_stm32f2xx.h"
 #include "hci_usart_hal.h"
+#include "btstack_hal.h"
 #include "debug.h"
+#include "ble_provision.h"
 
 /******************************************************
  *                      Macros
@@ -32,19 +26,16 @@
  *                    Constants
  ******************************************************/
 #define BLE_TX_RX_STREAM_MAX              128
-#define TX_RX_STREAM_CMD_IDX              0
+#define TX_RX_STREAM_CMD_IDX              1
 #define TX_RX_STREAM_LEN_IDX              0
 
-#define CONFIG_AP_ENTRY_LEN_MIN    (9)
+#define CONFIG_AP_ENTRY_LEN_MIN           (9)
+
+#define BLE_DEVICE_NAME_MAX_LEN            20
 
 /******************************************************
  *                   Enumerations
  ******************************************************/
-
-/******************************************************
- *                 Type Definitions
- ******************************************************/
-
 typedef enum {
     GapStatus_Connected,
     GapStatus_Disconnect,
@@ -80,6 +71,13 @@ typedef enum {
     AP_SCANNED,
 } BLEProvisionAPState_t;
 
+/******************************************************
+ *                 Type Definitions
+ ******************************************************/
+
+/******************************************************
+ *                    Structures
+ ******************************************************/
 typedef struct {
     uint8_t                channel;
     wiced_security_t       security;
@@ -88,10 +86,6 @@ typedef struct {
     uint8_t                security_key_length;
     char                   security_key[ SECURITY_KEY_SIZE ];
 } Config_ap_entry_t;
-
-/******************************************************
- *                    Structures
- ******************************************************/
 
 /******************************************************
  *               Function Declarations
@@ -103,77 +97,84 @@ static void ble_provision_send_ip_config(void);
 static void ble_provision_send_sys_info(void);
 static void ble_provision_parse_cmd(uint8_t *stream, uint8_t stream_len);
 
-static wiced_bt_gatt_status_t ble_provision_gatt_cback(wiced_bt_gatt_evt_t event, wiced_bt_gatt_event_data_t *p_event_data);
-static wiced_bt_gatt_status_t ble_provision_gatt_write_request(wiced_bt_gatt_write_t *p_write_request);
-static wiced_bt_gatt_status_t ble_provision_gatt_read_request(wiced_bt_gatt_read_t *p_read_request);
 static wiced_result_t ble_provision_scan_result_handler(wiced_scan_handler_result_t* malloced_scan_result);
+static void deviceConnectedCallback(BLEStatus_t status, uint16_t handle);
+static void deviceDisconnectedCallback(uint16_t handle);
+static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t new_value_len);
+static uint16_t gattReadCallback(uint16_t value_handle, uint8_t * buffer, uint16_t buffer_size);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+bool fetch_or_generate_setup_ssid(wiced_ssid_t* SSID);
+wiced_result_t add_wiced_wifi_credentials(const char *ssid, uint16_t ssidLen, const char *password,
+        uint16_t passwordLen, wiced_security_t security, unsigned channel);
+#ifdef __cplusplus
+}
+#endif
 
 
 /******************************************************
  *               Variable Definitions
  ******************************************************/
-static uint8_t      ble_tx_rx_stream[BLE_TX_RX_STREAM_MAX];
-static uint8_t      ble_tx_rx_stream_len = 0;
-static uint8_t      rec_len = 0;
+static const uint8_t  BLE_PROVISION_SERVICE_UUID[16]  = { 0x3E,0xC6,0x14,0x00,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
+static const uint8_t  BLE_PROVISION_CMD_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x01,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
+static const uint8_t  BLE_PROVISION_STA_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x02,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
 
-/* BLE connect variable */
-static uint16_t 	connect_id = 0x0000;
+static uint8_t  ble_device_name[BLE_DEVICE_NAME_MAX_LEN] = { 0x00 };
+static uint8_t  appearance[2]      = { 0x00, 0x02 };
+static uint8_t  change[2]          = { 0x00, 0x00 };
+static uint8_t  conn_param[8]      = { 0x28, 0x00, 0x90, 0x01, 0x00, 0x00, 0x90, 0x01 };
+
+/* BLE connection variable */
+static uint16_t 	connect_handle = 0x0000;
+static uint16_t     command_value_handle = 0x0000;
+static uint16_t     status_value_handle = 0x0000;
+
 static GapStatus  	connect_status = GapStatus_Disconnect;
 
-/* GATT attrIbute values */
-static uint32_t    	peripheral_gatt_attribute_service_changed = 0;
-static uint16_t    	peripheral_gatt_generic_access_appearance = 0;
+/* GATT attribute values */
 static uint8_t      command_value[20];
 static uint8_t      command_value_len;
 static uint16_t    	command_notify_flag = 0x0000;
-static uint8_t		status_value;
+static uint8_t		status_value[1];
 static uint16_t		status_notify_flag = 0x0000;
+
+//Advertising Data.
+static uint8_t adv_data[31] = {
+    0x02,
+    0x01,0x06,
+    0x11,
+    0x07,0x1E,0x90,0x9E,0x66,0x85,0x7A,0xD9,0xA0,0xC3,0x49,0xCD,0x89,0x00,0x14,0xC6,0x3E,
+    0x09,
+    0x09,'D','u','o','-','?','?','?','?',
+};
+
+static uint8_t      ble_tx_rx_stream[BLE_TX_RX_STREAM_MAX];
+static uint8_t      ble_tx_rx_stream_len = 0;
+static uint8_t      rec_len = 0;
 
 static Cmd_pipe_state_t cmd_pipe_state = CMD_PIPE_AVAILABLE;
 
 static wiced_bool_t device_configured = WICED_FALSE;
 static uint8_t provision_status = PROVISION_STA_IDLE;
 
-const unsigned USART6_Index = 87;
-
-/* Stack and buffer pool configuration tables */
-extern wiced_bt_cfg_settings_t wiced_bt_cfg_settings;
-
-extern char link_interrupt_vectors_location;
-extern char link_ram_interrupt_vectors_location;
-extern char link_ram_interrupt_vectors_location_end;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void bt_uart_irq(void);
-
-wiced_result_t add_wiced_wifi_credentials(const char *ssid, uint16_t ssidLen, const char *password,
-        uint16_t passwordLen, wiced_security_t security, unsigned channel);
-
-#ifdef __cplusplus
-}
-#endif
 
 /******************************************************
  *               Function Definitions
  ******************************************************/
-/* Initialize peripheral */
-void ble_provision_init(void) {
-	static uint8_t init_done = 0;
+void ble_provision_init(void)
+{
+    static uint8_t init_done = 0;
 
     if(!init_done) {
         init_done = 1;
 
+        hal_btstack_deInit();
+
         HAL_Pin_Mode(BT_RTS, OUTPUT);
         HAL_GPIO_Write(BT_RTS, 1);
         wiced_rtos_delay_milliseconds(50);
-        HAL_HCI_USART_registerReceiveHandler(NULL);
-        HAL_HCI_USART_End(HAL_HCI_USART_SERIAL6);
-
-        uint32_t* isrs = (uint32_t*)&link_ram_interrupt_vectors_location;
-        isrs[USART6_Index] = (uint32_t)bt_uart_irq;
 
         HAL_Pin_Mode(BT_POWER, OUTPUT);
         HAL_GPIO_Write(BT_POWER, 0);
@@ -181,59 +182,51 @@ void ble_provision_init(void) {
         HAL_GPIO_Write(BT_POWER, 1);
         wiced_rtos_delay_milliseconds(100);
 
-        bt_stack_init();
+        // Get device name.
+        wiced_ssid_t name;
+        fetch_or_generate_setup_ssid(&name);
+        name.value[name.length] = '\0';
+        memcpy(&adv_data[23], name.value, MIN(name.length, 8));
+        memcpy(ble_device_name, name.value, MIN(name.length, 20));
 
-        wiced_bt_ble_advert_data_t adv_data;
-        wiced_bt_ble_128service_t  service;
+        hal_btstack_init();
 
-        uint8_t buf[16] = { UUID_SERVCLASS_BLE_PROVISION };
+        hal_btstack_setConnectedCallback(deviceConnectedCallback);
+        hal_btstack_setDisconnectedCallback(deviceDisconnectedCallback);
+        hal_btstack_setGattCharsRead(gattReadCallback);
+        hal_btstack_setGattCharsWrite(gattWriteCallback);
 
-        /* Set advertising data: device name and discoverable flag */
-        service.list_cmpl = WICED_TRUE;
-        memcpy(service.uuid128, buf, MAX_UUID_SIZE);
-        adv_data.flag = 0x06;
-        adv_data.p_services_128b = &service;
+        hal_btstack_addServiceUUID16bits(0x1800);
+        hal_btstack_addCharsUUID16bits(0x2A00, PROPERTY_READ|PROPERTY_WRITE, provision_name, sizeof(provision_name));
+        hal_btstack_addCharsUUID16bits(0x2A01, PROPERTY_READ, appearance, sizeof(appearance));
+        hal_btstack_addCharsUUID16bits(0x2A04, PROPERTY_READ, conn_param, sizeof(conn_param));
+        hal_btstack_addServiceUUID16bits(0x1801);
+        hal_btstack_addCharsUUID16bits(0x2A05, PROPERTY_INDICATE, change, sizeof(change));
 
-        wiced_bt_ble_set_advertisement_data(BTM_BLE_ADVERT_BIT_FLAGS|BTM_BLE_ADVERT_BIT_SERVICE_128|BTM_BLE_ADVERT_BIT_DEV_NAME, &adv_data);
+        hal_btstack_addServiceUUID128bits(BLE_PROVISION_SERVICE_UUID);
+        command_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_CMD_CHAR_UUID, PROPERTY_WRITE_WITHOUT_RESPONSE|PROPERTY_NOTIFY, command_value, command_value_len);
+        status_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_STA_CHAR_UUID, PROPERTY_NOTIFY, status_value, 1);
 
-        /* Enable privacy */
-        wiced_bt_ble_enable_privacy( WICED_TRUE );
+        // set ble advertising.
+        hal_btstack_setAdvData(sizeof(adv_data), (uint8_t *)adv_data);
 
-        /* Register for gatt event notifications */
-        wiced_bt_gatt_register(&ble_provision_gatt_cback);
-
-        /* Initialize GATT database */
-        wiced_bt_gatt_db_init ((uint8_t *)gatt_db, gatt_db_size);
+        hal_btstack_startAdvertising();
+        INFO("BLE Provisioning begin.\n");
     }
-
-    /* start LE advertising */
-    wiced_bt_start_advertisements(BTM_BLE_ADVERT_UNDIRECTED_HIGH, 0, NULL);
-    INFO("BLE Provisioning begin.\n");
 }
 
 void ble_provision_loop(void) {
-    wiced_rtos_delay_milliseconds( 10 );
+    hal_btstack_loop_execute();
 }
 
-void ble_provision_on_failed(void) {
-    provision_status = PROVISION_STA_CONNECT_FAILED;
-
-    if(connect_id != 0x0000) {
-        ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
-        wiced_rtos_delay_milliseconds(100);
-        wiced_bt_gatt_disconnect(connect_id);
-    }
-    WARN("Connect to failed.\n");
-}
-
-void ble_provision_finalize(void) {
+void ble_provision_finalize() {
     provision_status = PROVISION_STA_CONNECTED;
 
-    if(connect_id != 0x0000) {
-        ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
+    if(connect_handle != 0x0000) {
+        ble_provision_notify(status_value_handle, &provision_status, 1);
         wiced_rtos_delay_milliseconds(100);
         ble_provision_send_ip_config();
-        wiced_bt_gatt_disconnect(connect_id);
+        hal_btstack_disconnect(connect_handle);
     }
 
     wiced_rtos_delay_milliseconds( 500 );
@@ -242,6 +235,21 @@ void ble_provision_finalize(void) {
     HAL_Core_System_Reset();
 }
 
+void ble_provision_on_failed() {
+    provision_status = PROVISION_STA_CONNECT_FAILED;
+
+    if(connect_handle != 0x0000) {
+        ble_provision_notify(status_value_handle, &provision_status, 1);
+        wiced_rtos_delay_milliseconds(100);
+        hal_btstack_disconnect(connect_handle);
+    }
+    WARN("Connect to failed.\n");
+}
+
+
+/******************************************************
+ *            Static Local Function Definitions
+ ******************************************************/
 static void ble_provision_init_variables(void) {
     provision_status = PROVISION_STA_IDLE;
     device_configured = WICED_FALSE;
@@ -249,7 +257,7 @@ static void ble_provision_init_variables(void) {
 
 static void ble_provision_send_sys_info(void) {
     INFO("Send system info. \r\n");
-    if((command_notify_flag == 0x0100) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
+    if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         uint16_t ver[4] = {0x0000, 0x0000, 0x0000, 0x0000};
 
         ver[0] = FLASH_ModuleVersion(FLASH_INTERNAL, 0x08000000);
@@ -275,14 +283,14 @@ static void ble_provision_send_sys_info(void) {
         ble_tx_rx_stream_len += strlen(release_str);
 
         ble_tx_rx_stream[TX_RX_STREAM_LEN_IDX] = ble_tx_rx_stream_len;
-        ble_provision_notify(HDLC_BLE_PROVISION_COMMAND_VALUE, ble_tx_rx_stream, ble_tx_rx_stream_len);
+        ble_provision_notify(command_value_handle, ble_tx_rx_stream, ble_tx_rx_stream_len);
 
         DEBUG_D("Send system info successfully.\r\n");
     }
 }
 
 static void ble_provision_send_ap_details(wiced_scan_result_t* record) {
-    if((command_notify_flag == 0x0100) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
+    if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         ble_tx_rx_stream_len = 0;
         memset(ble_tx_rx_stream, '\0', BLE_TX_RX_STREAM_MAX);
 
@@ -316,12 +324,12 @@ static void ble_provision_send_ap_details(wiced_scan_result_t* record) {
         ble_tx_rx_stream_len += record->SSID.length;
 
         ble_tx_rx_stream[TX_RX_STREAM_LEN_IDX] = ble_tx_rx_stream_len;
-        ble_provision_notify(HDLC_BLE_PROVISION_COMMAND_VALUE, ble_tx_rx_stream, ble_tx_rx_stream_len);
+        ble_provision_notify(command_value_handle, ble_tx_rx_stream, ble_tx_rx_stream_len);
     }
 }
 
 static void ble_provision_send_ip_config(void) {
-    if((command_notify_flag == 0x0100) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
+    if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         wiced_security_t   sec;
         wiced_bss_info_t   ap_info;
         wiced_ip_address_t station_ip, gateway_ip;
@@ -368,7 +376,7 @@ static void ble_provision_send_ip_config(void) {
         ble_tx_rx_stream_len += ap_info.SSID_len;
 
         ble_tx_rx_stream[TX_RX_STREAM_LEN_IDX] = ble_tx_rx_stream_len;
-        ble_provision_notify(HDLC_BLE_PROVISION_COMMAND_VALUE, ble_tx_rx_stream, ble_tx_rx_stream_len);
+        ble_provision_notify(command_value_handle, ble_tx_rx_stream, ble_tx_rx_stream_len);
 
         DEBUG_D("Send IP config.\r\n");
 
@@ -378,7 +386,7 @@ static void ble_provision_send_ip_config(void) {
 
 static void ble_provision_notify(uint16_t attr_handle, uint8_t *pbuf, uint8_t len) {
 
-    if(attr_handle != HDLC_BLE_PROVISION_COMMAND_VALUE && attr_handle != HDLC_BLE_PROVISION_STATUS_VALUE)
+    if(attr_handle != command_value_handle && attr_handle != status_value_handle)
         return;
 
     cmd_pipe_state = CMD_PIPE_BUSY_NOTIFY;
@@ -391,14 +399,14 @@ static void ble_provision_notify(uint16_t attr_handle, uint8_t *pbuf, uint8_t le
             else
                 tx_len = len - i;
 
-            if(attr_handle == HDLC_BLE_PROVISION_COMMAND_VALUE) {
+            if(attr_handle == command_value_handle) {
                 memcpy(command_value, &pbuf[i], tx_len);
                 command_value_len = tx_len;
             }
             else {
                 status_value = *pbuf;
             }
-            wiced_bt_gatt_send_notification(connect_id, attr_handle, tx_len, &pbuf[i]);
+            hal_btstack_attServerSendNotify(attr_handle, &pbuf[i], tx_len);
     	    i += tx_len;
 
             wiced_rtos_delay_milliseconds(20);
@@ -426,8 +434,8 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
             cmd_pipe_state = CMD_PIPE_AVAILABLE;
             if(provision_status != PROVISION_STA_SCANNING) {
                 provision_status = PROVISION_STA_SCANNING;
-                ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
-                wiced_wifi_scan_networks(ble_provision_scan_result_handler, NULL );
+                ble_provision_notify(status_value_handle, &provision_status, 1);
+                wiced_wifi_scan_networks(ble_provision_scan_result_handler, NULL);
             }
             break;
 
@@ -456,7 +464,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
                 device_configured = WICED_TRUE;
 
                 provision_status = PROVISION_STA_CONFIG_AP;
-                ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
+                ble_provision_notify(status_value_handle, &provision_status, 1);
 
                 DEBUG_D("WiFi credentials saved.\r\n");
             }
@@ -469,7 +477,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
                 HAL_WLAN_notify_simple_config_done();
 
                 provision_status = PROVISION_STA_CONNECTING;
-                ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
+                ble_provision_notify(status_value_handle, &provision_status, 1);
 
                 DEBUG_D("Connecting to AP.\r\n");
             }
@@ -479,169 +487,99 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
     }
 }
 
+
 /******************************************************
- *             Callback Function Definitions
+ *            BLE Callback Function Definitions
  ******************************************************/
-/* GATT event handler */
-static wiced_bt_gatt_status_t ble_provision_gatt_cback(wiced_bt_gatt_evt_t event, wiced_bt_gatt_event_data_t *p_event_data) {
-    wiced_bt_gatt_status_t status = WICED_BT_GATT_SUCCESS;
+static void deviceConnectedCallback(BLEStatus_t status, uint16_t handle) {
+    switch (status) {
+        case BLE_STATUS_OK:
+            connect_status = GapStatus_Connected;
+            connect_handle = handle;
 
-    switch (event) {
-        case GATT_CONNECTION_STATUS_EVT:
-            /* GATT connection status change */
-            if (p_event_data->connection_status.connected) {
-                connect_status = GapStatus_Connected;
-                connect_id = p_event_data->connection_status.conn_id;
+            ble_provision_init_variables();
 
-                ble_provision_init_variables();
-
-                /* Disable connectability. */
-                wiced_bt_start_advertisements (BTM_BLE_ADVERT_OFF, 0, NULL);
-            }
-            else {
-                connect_status = GapStatus_Disconnect;
-                connect_id = 0x0000;
-                command_notify_flag = 0x0000;
-                status_notify_flag = 0x0000;
-
-                /* Connection released. Re-enable BLE connectability. */
-                if(device_configured != WICED_TRUE)
-                    wiced_bt_start_advertisements (BTM_BLE_ADVERT_UNDIRECTED_HIGH, 0, NULL);
-            }
-            break;
-
-        case GATT_ATTRIBUTE_REQUEST_EVT:
-            /* GATT attribute read/write request */
-            if (p_event_data->attribute_request.request_type == GATTS_REQ_TYPE_WRITE)
-                status = ble_provision_gatt_write_request(&p_event_data->attribute_request.data.write_req);
-            else if (p_event_data->attribute_request.request_type == GATTS_REQ_TYPE_READ)
-                status = ble_provision_gatt_read_request(&p_event_data->attribute_request.data.read_req);
+            /* Disable connectability. */
+            hal_btstack_stopAdvertising();
             break;
 
         default:
             break;
     }
-
-    return (status);
 }
 
-/* Handler for attrubute write requests */
-static wiced_bt_gatt_status_t ble_provision_gatt_write_request(wiced_bt_gatt_write_t *p_write_request) {
-    uint8_t new_value[20];
-    uint8_t new_value_len;
-    wiced_bt_gatt_status_t status = WICED_BT_GATT_SUCCESS;
+static void deviceDisconnectedCallback(uint16_t handle) {
+    connect_status = GapStatus_Disconnect;
+    connect_id = 0x0000;
+    command_notify_flag = 0x0000;
+    status_notify_flag = 0x0000;
 
-    new_value_len = p_write_request->val_len;
-    memcpy(new_value, (uint8_t *)p_write_request->p_val, new_value_len);
-
-    switch (p_write_request->handle) {
-        /* Client Characteristic Configuration Descriptor */
-        case HDLC_BLE_PROVISION_COMMAND_CCCD:
-            if(new_value_len >= 2) {
-                command_notify_flag = new_value[0];
-                command_notify_flag = (command_notify_flag<<8) + new_value[1];
-            }
-            break;
-
-        case HDLC_BLE_PROVISION_STATUS_CCCD:
-            if(new_value_len >= 2) {
-                status_notify_flag = new_value[0];
-                status_notify_flag = (status_notify_flag<<8) + new_value[1];
-            }
-            break;
-
-        /* Server characteristic attribute value */
-        case HDLC_BLE_PROVISION_COMMAND_VALUE:
-            if(cmd_pipe_state == CMD_PIPE_AVAILABLE) {
-                ble_tx_rx_stream_len = new_value[0];
-                if(ble_tx_rx_stream_len >= 2) {        // At least 2 byte: stream_len + command + [...]
-                    rec_len = 0;
-                    memset(ble_tx_rx_stream, '\0', BLE_TX_RX_STREAM_MAX);
-                    cmd_pipe_state = CMD_PIPE_BUSY_WRITE;
-                }
-            }
-
-            if(cmd_pipe_state == CMD_PIPE_BUSY_WRITE) {
-                memcpy(&ble_tx_rx_stream[rec_len], new_value, new_value_len);
-                rec_len += new_value_len;
-                if(rec_len >= ble_tx_rx_stream_len) {
-                	ble_provision_parse_cmd(&ble_tx_rx_stream[1], ble_tx_rx_stream_len-1);
-                    ble_tx_rx_stream_len = 0;
-                    cmd_pipe_state = CMD_PIPE_AVAILABLE;
-                }
-            }
-            break;
-
-        default:
-            status = WICED_BT_GATT_WRITE_NOT_PERMIT;
-            break;
-    }
-
-    return (status);
+    /* Connection released. Re-enable BLE connectability. */
+    if(device_configured != WICED_TRUE)
+    	hal_btstack_startAdvertising();
 }
 
-/* Handler for attrubute read requests */
-static wiced_bt_gatt_status_t ble_provision_gatt_read_request(wiced_bt_gatt_read_t *p_read_request) {
-    wiced_bt_gatt_status_t status = WICED_BT_GATT_SUCCESS;
+static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t new_value_len) {
 
-    void *p_attribute_value_source;
-    uint16_t attribute_value_length = 0;
+    /* Client Characteristic Configuration Descriptor */
+    if(value_handle == (command_value_handle+1)) {
+        if(new_value_len >= 2) {
+            command_notify_flag = new_value[1];    // Low byte comes first
+            command_notify_flag = (command_notify_flag<<8) + new_value[0];
+        }
+    }
+    else if(value_handle == (status_value_handle+1)) {
+        if(new_value_len >= 2) {
+            status_notify_flag = new_value[1];
+            status_notify_flag = (status_notify_flag<<8) + new_value[0];
+        }
+    }
+    /* Server characteristic attribute value */
+    else if(value_handle == command_value_handle) {
+        if(cmd_pipe_state == CMD_PIPE_AVAILABLE) {
+            ble_tx_rx_stream_len = new_value[0];
+            if(ble_tx_rx_stream_len >= 2) {        // At least 2 byte: stream_len + command + [...]
+                rec_len = 0;
+                memset(ble_tx_rx_stream, '\0', BLE_TX_RX_STREAM_MAX);
+                cmd_pipe_state = CMD_PIPE_BUSY_WRITE;
+            }
+        }
 
-    switch (p_read_request->handle) {
-        case HDLC_GENERIC_ATTRIBUTE_SERVICE_CHANGED_VALUE:
-            p_attribute_value_source    = &peripheral_gatt_attribute_service_changed;
-            attribute_value_length      = sizeof(peripheral_gatt_attribute_service_changed);
-            break;
-
-        case HDLC_GENERIC_ACCESS_DEVICE_NAME_VALUE:
-            p_attribute_value_source    = (void *)wiced_bt_cfg_settings.device_name;
-            attribute_value_length      = strlen((char *)wiced_bt_cfg_settings.device_name);
-            break;
-
-        case HDLC_GENERIC_ACCESS_APPEARANCE_VALUE:
-            p_attribute_value_source    = &peripheral_gatt_generic_access_appearance;
-            attribute_value_length      = sizeof(peripheral_gatt_generic_access_appearance);
-            break;
-
-        case HDLC_BLE_PROVISION_COMMAND_CCCD:
-            p_attribute_value_source    = &command_notify_flag;
-            attribute_value_length      = sizeof(command_notify_flag);
-            break;
-
-        case HDLC_BLE_PROVISION_STATUS_CCCD:
-            p_attribute_value_source    = &status_notify_flag;
-            attribute_value_length      = sizeof(status_notify_flag);
-            break;
-
-        case HDLC_BLE_PROVISION_COMMAND_VALUE:
-            p_attribute_value_source    = command_value;
-            attribute_value_length      = command_value_len;
-            break;
-
-        case HDLC_BLE_PROVISION_STATUS_VALUE:
-            p_attribute_value_source    = &status_value;
-            attribute_value_length      = 1;
-            break;
-
-        default:
-            status = WICED_BT_GATT_READ_NOT_PERMIT;
-            break;
+        if(cmd_pipe_state == CMD_PIPE_BUSY_WRITE) {
+            memcpy(&ble_tx_rx_stream[rec_len], new_value, new_value_len);
+            rec_len += new_value_len;
+            if(rec_len >= ble_tx_rx_stream_len) {
+                ble_provision_parse_cmd(&ble_tx_rx_stream[1], ble_tx_rx_stream_len-1);
+                ble_tx_rx_stream_len = 0;
+                cmd_pipe_state = CMD_PIPE_AVAILABLE;
+            }
+        }
     }
 
-    /* Validate destination buffer size */
-    if (attribute_value_length > *p_read_request->p_val_len) {
-        *p_read_request->p_val_len = attribute_value_length;
+    return 0;
+}
+
+static uint16_t gattReadCallback(uint16_t value_handle, uint8_t *value, uint16_t value_len) {
+
+    uint8_t characteristic_len=0;
+
+    if(value_handle == (command_value_handle+1)) {
+    	value = (uint8_t *)&command_notify_flag;    // Little Endian, so low byte sent first
+        characteristic_len = sizeof(command_notify_flag);
     }
-
-    /* Copy the attribute value */
-    if (attribute_value_length) {
-        memcpy(p_read_request->p_val, p_attribute_value_source, attribute_value_length);
+    else if(value_handle == (status_value_handle+1)) {
+    	value = (uint8_t *)&status_notify_flag;
+        characteristic_len = sizeof(status_notify_flag);
     }
-
-    /* Indicate number of bytes copied */
-    *p_read_request->p_val_len = attribute_value_length;
-
-    return (status);
+    else if(command_value_handle == value_handle) {
+        memcpy(value, command_value, command_value_len);
+        characteristic_len = command_value_len;
+    }
+    else if(status_value_handle == value_handle) {
+        *value = status_value[0];
+        characteristic_len = 1;
+    }
+    return characteristic_len;
 }
 
 /* Callback function to handle scan results */
@@ -662,3 +600,4 @@ static wiced_result_t ble_provision_scan_result_handler( wiced_scan_handler_resu
 
     return WICED_SUCCESS;
 }
+
