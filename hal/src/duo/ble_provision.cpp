@@ -127,7 +127,7 @@ static uint8_t  change[2]          = { 0x00, 0x00 };
 static uint8_t  conn_param[8]      = { 0x28, 0x00, 0x90, 0x01, 0x00, 0x00, 0x90, 0x01 };
 
 /* BLE connection variable */
-static uint16_t 	connect_handle = 0x0000;
+static uint16_t 	connect_handle = 0xFFFF;
 static uint16_t     command_value_handle = 0x0000;
 static uint16_t     status_value_handle = 0x0000;
 
@@ -222,7 +222,7 @@ void ble_provision_loop(void) {
 void ble_provision_finalize() {
     provision_status = PROVISION_STA_CONNECTED;
 
-    if(connect_handle != 0x0000) {
+    if(connect_handle != 0xFFFF) {
         ble_provision_notify(status_value_handle, &provision_status, 1);
         wiced_rtos_delay_milliseconds(100);
         ble_provision_send_ip_config();
@@ -238,12 +238,12 @@ void ble_provision_finalize() {
 void ble_provision_on_failed() {
     provision_status = PROVISION_STA_CONNECT_FAILED;
 
-    if(connect_handle != 0x0000) {
+    if(connect_handle != 0xFFFF) {
         ble_provision_notify(status_value_handle, &provision_status, 1);
         wiced_rtos_delay_milliseconds(100);
         hal_btstack_disconnect(connect_handle);
     }
-    WARN("Connect to failed.\n");
+    WARN("Connect to AP failed.\n");
 }
 
 
@@ -523,7 +523,7 @@ static void deviceDisconnectedCallback(uint16_t handle) {
     DEBUG_D("BLE device disconnect.\r\n");
 
     connect_status = GapStatus_Disconnect;
-    connect_handle = 0x0000;
+    connect_handle = 0xFFFF;
     command_notify_flag = 0x0000;
     status_notify_flag = 0x0000;
 
