@@ -256,7 +256,9 @@ static void ble_provision_init_variables(void) {
 }
 
 static void ble_provision_send_sys_info(void) {
-    INFO("Send system info. \r\n");
+
+	DEBUG_D("Send system info. \r\n");
+
     if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         uint16_t ver[4] = {0x0000, 0x0000, 0x0000, 0x0000};
 
@@ -284,12 +286,13 @@ static void ble_provision_send_sys_info(void) {
 
         ble_tx_rx_stream[TX_RX_STREAM_LEN_IDX] = ble_tx_rx_stream_len;
         ble_provision_notify(command_value_handle, ble_tx_rx_stream, ble_tx_rx_stream_len);
-
-        DEBUG_D("Send system info successfully.\r\n");
     }
 }
 
 static void ble_provision_send_ap_details(wiced_scan_result_t* record) {
+
+    DEBUG_D("Notify scanned AP: %s\r\n", record->SSID.value);
+
     if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         ble_tx_rx_stream_len = 0;
         memset(ble_tx_rx_stream, '\0', BLE_TX_RX_STREAM_MAX);
@@ -329,6 +332,9 @@ static void ble_provision_send_ap_details(wiced_scan_result_t* record) {
 }
 
 static void ble_provision_send_ip_config(void) {
+
+    DEBUG_D("Send IP config.\r\n");
+
     if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         wiced_security_t   sec;
         wiced_bss_info_t   ap_info;
@@ -378,8 +384,6 @@ static void ble_provision_send_ip_config(void) {
         ble_tx_rx_stream[TX_RX_STREAM_LEN_IDX] = ble_tx_rx_stream_len;
         ble_provision_notify(command_value_handle, ble_tx_rx_stream, ble_tx_rx_stream_len);
 
-        DEBUG_D("Send IP config.\r\n");
-
         wiced_rtos_delay_milliseconds(200);
     }
 }
@@ -419,11 +423,10 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
 
 	BLEProvisionCmd_t provision_cmd = (BLEProvisionCmd_t)data[0];
 
-    DEBUG_D("BLE Provision command: %d\r\n", data[0]);
-
     switch(provision_cmd)
     {
         case PROVISION_CMD_NOTIFY_SYS_INFO:
+            DEBUG_D("Command: Notify system information.\r\n");
             cmd_pipe_state = CMD_PIPE_AVAILABLE;
             if(provision_status != PROVISION_STA_SCANNING) {
                 ble_provision_send_sys_info();
@@ -431,6 +434,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
             break;
 
         case PROVISION_CMD_SCAN_REQUEST:
+            DEBUG_D("Command: Scan network.\r\n");
             cmd_pipe_state = CMD_PIPE_AVAILABLE;
             if(provision_status != PROVISION_STA_SCANNING) {
                 provision_status = PROVISION_STA_SCANNING;
@@ -440,6 +444,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
             break;
 
         case PROVISION_CMD_CONFIG_AP_ENTRY:
+            DEBUG_D("Command: Config AP entry.\r\n");
             if((data_len-1) >= CONFIG_AP_ENTRY_LEN_MIN) {
                 Config_ap_entry_t config_ap_entry;
                 uint32_t security = 0x00000000;
@@ -472,6 +477,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
             break;
 
         case PROVISION_CMD_CONNECT_AP:
+            DEBUG_D("Command: Connect to AP.\r\n");
             cmd_pipe_state = CMD_PIPE_AVAILABLE;
             if(device_configured == WICED_TRUE) {
                 HAL_WLAN_notify_simple_config_done();
@@ -479,11 +485,13 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
                 provision_status = PROVISION_STA_CONNECTING;
                 ble_provision_notify(status_value_handle, &provision_status, 1);
 
-                DEBUG_D("Connecting to AP.\r\n");
+                DEBUG_D("Connecting...\r\n");
             }
             break;
 
-        default: break;
+        default:
+            DEBUG_D("Command: Unknown.\r\n");
+            break;
     }
 }
 
@@ -494,6 +502,8 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
 static void deviceConnectedCallback(BLEStatus_t status, uint16_t handle) {
     switch (status) {
         case BLE_STATUS_OK:
+            DEBUG_D("BLE device connected.\r\n");
+
             connect_status = GapStatus_Connected;
             connect_handle = handle;
 
@@ -509,6 +519,9 @@ static void deviceConnectedCallback(BLEStatus_t status, uint16_t handle) {
 }
 
 static void deviceDisconnectedCallback(uint16_t handle) {
+
+    DEBUG_D("BLE device disconnect.\r\n");
+
     connect_status = GapStatus_Disconnect;
     connect_handle = 0x0000;
     command_notify_flag = 0x0000;
@@ -524,12 +537,14 @@ static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t
     /* Client Characteristic Configuration Descriptor */
     if(value_handle == (command_value_handle+1)) {
         if(new_value_len >= 2) {
+            DEBUG_D("Enable command characteristic CCCD.\r\n");
             command_notify_flag = new_value[1];    // Low byte comes first
             command_notify_flag = (command_notify_flag<<8) + new_value[0];
         }
     }
     else if(value_handle == (status_value_handle+1)) {
         if(new_value_len >= 2) {
+            DEBUG_D("Enable status characteristic CCCD.\r\n");
             status_notify_flag = new_value[1];
             status_notify_flag = (status_notify_flag<<8) + new_value[0];
         }
@@ -542,6 +557,7 @@ static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t
                 rec_len = 0;
                 memset(ble_tx_rx_stream, '\0', BLE_TX_RX_STREAM_MAX);
                 cmd_pipe_state = CMD_PIPE_BUSY_WRITE;
+                DEBUG_D("Receiving command stream. Length: %d\r\n", ble_tx_rx_stream_len);
             }
         }
 
@@ -549,6 +565,7 @@ static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t
             memcpy(&ble_tx_rx_stream[rec_len], new_value, new_value_len);
             rec_len += new_value_len;
             if(rec_len >= ble_tx_rx_stream_len) {
+                DEBUG_D("Received command stream complete.\r\n");
                 ble_provision_parse_cmd(&ble_tx_rx_stream[1], ble_tx_rx_stream_len-1);
                 ble_tx_rx_stream_len = 0;
                 cmd_pipe_state = CMD_PIPE_AVAILABLE;
@@ -562,6 +579,8 @@ static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t
 static uint16_t gattReadCallback(uint16_t value_handle, uint8_t *value, uint16_t value_len) {
 
     uint8_t characteristic_len=0;
+
+    DEBUG_D("Read attribute callback.\r\n");
 
     if(value_handle == (command_value_handle+1)) {
     	value = (uint8_t *)&command_notify_flag;    // Little Endian, so low byte sent first
