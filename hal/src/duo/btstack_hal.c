@@ -43,6 +43,7 @@ enum {
 
 /**@brief btstack state. */
 static int btstack_state;
+static uint8_t hci_init_flag = 0;
 
 static uint16_t le_peripheral_todos = 0;
 
@@ -249,68 +250,76 @@ static void gatt_client_callback(uint8_t packet_type, uint8_t * packet, uint16_t
  */
 void hal_btstack_init(void)
 {
-    wlan_activate();
+    if(!hci_init_flag)
+    {
+        wlan_activate();
 
-    have_custom_addr = false;
-    // reset handler
-    //bleAdvertismentCallback = NULL;
-    bleDeviceConnectedCallback = NULL;
-    bleDeviceDisconnectedCallback = NULL;
-    //gattServiceDiscoveredCallback = NULL;
-    //gattCharacteristicDiscoveredCallback = NULL;
-    //gattCharacteristicNotificationCallback = NULL;
+        have_custom_addr = false;
+        // reset handler
+        //bleAdvertismentCallback = NULL;
+        bleDeviceConnectedCallback = NULL;
+        bleDeviceDisconnectedCallback = NULL;
+        //gattServiceDiscoveredCallback = NULL;
+        //gattCharacteristicDiscoveredCallback = NULL;
+        //gattCharacteristicNotificationCallback = NULL;
 
-    att_db_util_init();
+        att_db_util_init();
 
-    btstack_memory_init();
-    run_loop_init(run_loop_wiced_get_instance());
+        btstack_memory_init();
+        run_loop_init(run_loop_wiced_get_instance());
 
-    hci_transport_t    * transport = hci_transport_h4_wiced_instance();
-    bt_control_t       * control   = bt_control_bcm_instance();
-    remote_device_db_t * remote_db = (remote_device_db_t *) &remote_device_db_memory;
-    hci_init(transport, (void*)&hci_uart_config, control, remote_db);
+        hci_transport_t    * transport = hci_transport_h4_wiced_instance();
+        bt_control_t       * control   = bt_control_bcm_instance();
+        remote_device_db_t * remote_db = (remote_device_db_t *) &remote_device_db_memory;
+        hci_init(transport, (void*)&hci_uart_config, control, remote_db);
 
-    if (have_custom_addr){
-        hci_set_bd_addr(public_bd_addr);
-    }
+        if (have_custom_addr){
+            hci_set_bd_addr(public_bd_addr);
+        }
 
-    hci_set_hardware_error_callback(&bluetooth_hardware_error);
+        hci_set_hardware_error_callback(&bluetooth_hardware_error);
 
-    l2cap_init();
+        l2cap_init();
 
-    // setup central device db
-    le_device_db_init();
+        // setup central device db
+        le_device_db_init();
 
-    sm_init();
+        sm_init();
 
-    att_server_init(att_db_util_get_address(),att_read_callback, att_write_callback);
-    att_server_register_packet_handler(packet_handler);
+        att_server_init(att_db_util_get_address(),att_read_callback, att_write_callback);
+        att_server_register_packet_handler(packet_handler);
 
-    gatt_client_init();
-    gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
+        gatt_client_init();
+        gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
 
-    // setup advertisements params
-    uint16_t adv_int_min = 0x0030;
-    uint16_t adv_int_max = 0x0030;
-    uint8_t adv_type = 0;
-    bd_addr_t null_addr;
-    memset(null_addr, 0, 6);
-    gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+        // setup advertisements params
+        uint16_t adv_int_min = 0x0030;
+        uint16_t adv_int_max = 0x0030;
+        uint8_t adv_type = 0;
+        bd_addr_t null_addr;
+        memset(null_addr, 0, 6);
+        gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
 
-    // turn on!
-    btstack_state = 0;
-    hci_power_control(HCI_POWER_ON);
+        // turn on!
+        btstack_state = 0;
+        hci_power_control(HCI_POWER_ON);
 
-    // poll until working
-    while (btstack_state != HCI_STATE_WORKING){
-        run_loop_execute();
+        // poll until working
+        while (btstack_state != HCI_STATE_WORKING){
+            run_loop_execute();
+        }
+        hci_init_flag = 1;
     }
 }
 
 void hal_btstack_deInit(void)
 {
-    hci_close();
-    run_loop_deInit();
+    if(hci_init_flag)
+    {
+        hci_close();
+        run_loop_deInit();
+    }
+    hci_init_flag = 0;
 }
 
 /**
