@@ -742,6 +742,7 @@ protected:
 const char* const SetValueCommand::KEY[2] = { "k", "v" };
 const jsmntype_t SetValueCommand::TYPE[2] = { JSMN_STRING, JSMN_STRING };
 
+
 #ifdef SOFTAP_OTA_SERVER
 
 struct FileInfo {
@@ -831,12 +832,31 @@ protected:
         return true;
     }
 };
+
+
+class CheckCredentialCommand : public JSONCommand {
+
+public:
+	CheckCredentialCommand() {}
+
+protected:
+    int process() {
+        return wlan_has_credentials()==0;
+    }
+
+    void produce_response(Writer& out, int result) {
+        write_char(out, '{');
+        write_json_int(out, "has credentials", result);
+        write_char(out, '}');
+    }
+};
 #endif
 
 struct AllSoftAPCommands {
 #ifdef SOFTAP_OTA_SERVER
     PrepareUpdateCommand prepareUpdate;
     FinishUpdateCommand finishUpdate;
+    CheckCredentialCommand checkCredential;
 #endif
     VersionCommand version;
     DeviceIDCommand deviceID;
@@ -1249,6 +1269,8 @@ class SimpleProtocolDispatcher
                 cmd = &commands_.prepareUpdate;
             else if (!strcmp("finish-update", name))
                 cmd = &commands_.finishUpdate;
+            else if (!strcmp("check-credential", name))
+                cmd = &commands_.checkCredential;
 #endif
             else if (!strcmp("ant-internal", name))
                 wwd_wifi_select_antenna(WICED_ANTENNA_1);
