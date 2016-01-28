@@ -117,9 +117,9 @@ wiced_result_t add_wiced_wifi_credentials(const char *ssid, uint16_t ssidLen, co
 /******************************************************
  *               Variable Definitions
  ******************************************************/
-static const uint8_t  BLE_PROVISION_SERVICE_UUID[16]  = { 0x3E,0xC6,0x14,0x00,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
-static const uint8_t  BLE_PROVISION_CMD_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x01,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
-static const uint8_t  BLE_PROVISION_STA_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x02,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
+static uint8_t  BLE_PROVISION_SERVICE_UUID[16]  = { 0x3E,0xC6,0x14,0x00,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
+static uint8_t  BLE_PROVISION_CMD_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x01,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
+static uint8_t  BLE_PROVISION_STA_CHAR_UUID[16] = { 0x3E,0xC6,0x14,0x02,0x89,0xCD,0x49,0xC3,0xA0,0xD9,0x7A,0x85,0x66,0x9E,0x90,0x1E };
 
 static uint8_t  ble_device_name[BLE_DEVICE_NAME_MAX_LEN] = { 0x00 };
 static uint8_t  appearance[2]      = { 0x00, 0x02 };
@@ -197,7 +197,7 @@ void ble_provision_init(void)
         hal_btstack_setGattCharsWrite(gattWriteCallback);
 
         hal_btstack_addServiceUUID16bits(0x1800);
-        hal_btstack_addCharsUUID16bits(0x2A00, PROPERTY_READ|PROPERTY_WRITE, provision_name, sizeof(provision_name));
+        hal_btstack_addCharsUUID16bits(0x2A00, PROPERTY_READ|PROPERTY_WRITE, ble_device_name, sizeof(ble_device_name));
         hal_btstack_addCharsUUID16bits(0x2A01, PROPERTY_READ, appearance, sizeof(appearance));
         hal_btstack_addCharsUUID16bits(0x2A04, PROPERTY_READ, conn_param, sizeof(conn_param));
         hal_btstack_addServiceUUID16bits(0x1801);
@@ -404,7 +404,7 @@ static void ble_provision_notify(uint16_t attr_handle, uint8_t *pbuf, uint8_t le
                 command_value_len = tx_len;
             }
             else {
-                status_value = *pbuf;
+                status_value[0] = *pbuf;
             }
             hal_btstack_attServerSendNotify(attr_handle, &pbuf[i], tx_len);
     	    i += tx_len;
@@ -510,7 +510,7 @@ static void deviceConnectedCallback(BLEStatus_t status, uint16_t handle) {
 
 static void deviceDisconnectedCallback(uint16_t handle) {
     connect_status = GapStatus_Disconnect;
-    connect_id = 0x0000;
+    connect_handle = 0x0000;
     command_notify_flag = 0x0000;
     status_notify_flag = 0x0000;
 
@@ -593,7 +593,7 @@ static wiced_result_t ble_provision_scan_result_handler( wiced_scan_handler_resu
     }
     else {
         provision_status = PROVISION_STA_SCAN_COMPLETE;
-        ble_provision_notify(HDLC_BLE_PROVISION_STATUS_VALUE, &provision_status, 1);
+        ble_provision_notify(status_value_handle, &provision_status, 1);
     }
 
     free( malloced_scan_result );
