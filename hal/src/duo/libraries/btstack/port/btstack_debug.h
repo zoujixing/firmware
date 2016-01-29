@@ -36,15 +36,15 @@
  */
 
 /*
- *  debug.h
+ *  btstack_debug.h
  *
  *  allow to funnel debug & error messages 
  */
 
-#ifndef __BTSTACK_DEBUG_H
-#define __BTSTACK_DEBUG_H
+#ifndef __DEBUG_H
+#define __DEBUG_H
 
-#include "btstack-config.h"
+#include "btstack_config.h"
 #include "hci_dump.h"
 
 #include <stdio.h>
@@ -53,13 +53,8 @@
 #include <avr/pgmspace.h>
 #endif
 
-#ifndef EMBEDDED
 // Avoid complaints of unused arguments when log levels are disabled.
-static inline void __log_unused(const char *format, ...) {
-}
-#else
-#define __log_unused(...)
-#endif
+static inline void __log_unused(const char *format, ...) {}
 
 #ifdef __AVR__
 #define HCI_DUMP_LOG(log_level, format, ...) hci_dump_log_P(log_level, PSTR(format), ## __VA_ARGS__)
@@ -70,7 +65,7 @@ static inline void __log_unused(const char *format, ...) {
 #endif
 
 #ifdef ENABLE_LOG_DEBUG
-#ifdef HAVE_HCI_DUMP
+#ifdef ENABLE_LOG_INTO_HCI_DUMP
 #define log_debug(format, ...)  HCI_DUMP_LOG(LOG_LEVEL_DEBUG, format,  ## __VA_ARGS__)
 #else
 #define log_debug(format, ...)  BTSTACK_PRINTF(format "\n",  ## __VA_ARGS__)
@@ -80,7 +75,7 @@ static inline void __log_unused(const char *format, ...) {
 #endif
 
 #ifdef ENABLE_LOG_INFO
-#ifdef HAVE_HCI_DUMP
+#ifdef ENABLE_LOG_INTO_HCI_DUMP
 #define log_info(format, ...)  HCI_DUMP_LOG(LOG_LEVEL_INFO, format,  ## __VA_ARGS__)
 #else
 #define log_info(format, ...)  BTSTACK_PRINTF(format "\n",  ## __VA_ARGS__)
@@ -90,7 +85,7 @@ static inline void __log_unused(const char *format, ...) {
 #endif
 
 #ifdef ENABLE_LOG_ERROR
-#ifdef HAVE_HCI_DUMP
+#ifdef ENABLE_LOG_INTO_HCI_DUMP
 #define log_error(format, ...)  HCI_DUMP_LOG(LOG_LEVEL_ERROR, format,  ## __VA_ARGS__)
 #else
 #define log_error(format, ...)  BTSTACK_PRINTF(format "\n",  ## __VA_ARGS__)

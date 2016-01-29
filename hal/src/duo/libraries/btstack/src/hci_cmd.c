@@ -36,18 +36,18 @@
  */
 
 /*
- *  hci_cmds.c
+ *  hci_cmd.c
  *
  *  Created by Matthias Ringwald on 7/23/09.
  */
 
-#include "hci_cmds.h"
-
-#include <string.h>
+#include "btstack_config.h"
 
 #include "classic/sdp_util.h"
-#include "btstack-config.h"
 #include "hci.h"
+#include "hci_cmd.h"
+
+#include <string.h>
 
 // calculate combined ogf/ocf value
 #define OPCODE(ogf, ocf) (ocf | ogf << 10)
@@ -66,7 +66,7 @@
  *   A: 31 bytes advertising data
  *   S: Service Record (Data Element Sequence)
  */
-uint16_t hci_create_cmd_internal(uint8_t *hci_cmd_buffer, const hci_cmd_t *cmd, va_list argptr){
+uint16_t hci_cmd_create_from_template(uint8_t *hci_cmd_buffer, const hci_cmd_t *cmd, va_list argptr){
     
     hci_cmd_buffer[0] = cmd->opcode & 0xff;
     hci_cmd_buffer[1] = cmd->opcode >> 8;
@@ -140,14 +140,14 @@ uint16_t hci_create_cmd_internal(uint8_t *hci_cmd_buffer, const hci_cmd_t *cmd, 
                 memcpy(&hci_cmd_buffer[pos], ptr, 16);
                 pos += 16;
                 break;
-#ifdef HAVE_BLE
+#ifdef ENABLE_BLE
             case 'A': // 31 bytes advertising data
                 ptr = va_arg(argptr, uint8_t *);
                 memcpy(&hci_cmd_buffer[pos], ptr, 31);
                 pos += 31;
                 break;
 #endif
-#ifdef HAVE_SDP
+#ifdef ENABLE_SDP
             case 'S': { // Service Record (Data Element Sequence)
                 ptr = va_arg(argptr, uint8_t *);
                 uint16_t len = de_get_len(ptr);
@@ -168,12 +168,12 @@ uint16_t hci_create_cmd_internal(uint8_t *hci_cmd_buffer, const hci_cmd_t *cmd, 
 /**
  * construct HCI Command based on template
  *
- * mainly calls hci_create_cmd_internal
+ * mainly calls hci_cmd_create_from_template
  */
 uint16_t hci_create_cmd(uint8_t *hci_cmd_buffer, hci_cmd_t *cmd, ...){
     va_list argptr;
     va_start(argptr, cmd);
-    uint16_t len = hci_create_cmd_internal(hci_cmd_buffer, cmd, argptr);
+    uint16_t len = hci_cmd_create_from_template(hci_cmd_buffer, cmd, argptr);
     va_end(argptr);
     return len;
 }
@@ -741,7 +741,7 @@ OPCODE(OGF_STATUS_PARAMETERS, 0x05), "H"
 
 
 
-#ifdef HAVE_BLE
+#ifdef ENABLE_BLE
 /**
  * Low Energy Commands
  */

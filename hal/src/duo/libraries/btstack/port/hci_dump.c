@@ -47,16 +47,16 @@
  *  Created by Matthias Ringwald on 5/26/09.
  */
 
-#include "btstack-config.h"
+#include "btstack_config.h"
 
 #include "hci_dump.h"
 #include "hci.h"
 #include "hci_transport.h"
-#include "hci_cmds.h"
-#include "run_loop.h"
+#include "hci_cmd.h"
+#include "btstack_run_loop.h"
 #include <stdio.h>
 
-#ifndef EMBEDDED
+#ifdef HAVE_POSIX_FILE_IO
 #include <fcntl.h>        // open
 #include <unistd.h>       // write 
 #include <time.h>
@@ -64,11 +64,9 @@
 #include <sys/stat.h>     // for mode flags
 #include <stdarg.h>       // for va_list
 #endif
-
 #ifdef HAVE_PARTICLE
 #include "usb_hal.h"
 #endif
-
 // BLUEZ hcidump - struct not used directly, but left here as documentation
 typedef struct {
     uint16_t    len;
@@ -92,7 +90,7 @@ pktlog_hdr;
 #define PKTLOG_HDR_SIZE 13
 
 static int dump_file = -1;
-#ifndef EMBEDDED
+#ifdef HAVE_POSIX_FILE_IO
 static int dump_format;
 static uint8_t header_bluez[HCIDUMP_HDR_SIZE];
 static uint8_t header_packetlogger[PKTLOG_HDR_SIZE];
@@ -136,23 +134,25 @@ void hal_printf_hexdump(const void *data, int size){
 #endif
 
 void hci_dump_open(const char *filename, hci_dump_format_t format){
-#ifdef EMBEDDED
-    dump_file = 1;
-#else
+#ifdef HAVE_POSIX_FILE_IO
     dump_format = format;
     if (dump_format == HCI_DUMP_STDOUT) {
         dump_file = fileno(stdout);
     } else {
-#ifdef _WIN32
+
+# ifdef _WIN32
         dump_file = open(filename, O_WRONLY | O_CREAT | O_TRUNC);
-#else
+# else
         dump_file = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-#endif
+# endif
+
     }
+#else
+    dump_file = 1;
 #endif
 }
 
-#ifndef EMBEDDED
+#ifdef HAVE_POSIX_FILE_IO
 void hci_dump_set_max_packets(int packets){
     max_nr_packets = packets;
 }
@@ -161,20 +161,20 @@ void hci_dump_set_max_packets(int packets){
 static void printf_packet(uint8_t packet_type, uint8_t in, uint8_t * packet, uint16_t len){
     switch (packet_type){
         case HCI_COMMAND_DATA_PACKET:
-            hal_printf("CMD => ");
+        	hal_printf("CMD => ");
             break;
         case HCI_EVENT_PACKET:
-            hal_printf("EVT <= ");
+        	hal_printf("EVT <= ");
             break;
         case HCI_ACL_DATA_PACKET:
             if (in) {
-                hal_printf("ACL <= ");
+            	hal_printf("ACL <= ");
             } else {
-                hal_printf("ACL => ");
+            	hal_printf("ACL => ");
             }
             break;
         case LOG_MESSAGE_PACKET:
-            hal_printf("LOG -- %s\n", (char*) packet);
+        	hal_printf("LOG -- %s\n", (char*) packet);
             return;
         default:
             return;
@@ -186,14 +186,8 @@ void hci_dump_packet(uint8_t packet_type, uint8_t in, uint8_t *packet, uint16_t 
 
     if (dump_file < 0) return; // not activated yet
 
-#ifdef EMBEDDED
-// #ifdef HAVE_TICK
-//     uint32_t time_ms = run_loop_embedded_get_time_ms();
-//     printf("[%06u] ", time_ms);
-// #endif
-    printf_packet(packet_type, in, packet, len);
+#ifdef HAVE_POSIX_FILE_IO
 
-#else
     // don't grow bigger than max_nr_packets
     if (dump_format != HCI_DUMP_STDOUT && max_nr_packets > 0){
         if (nr_packets >= max_nr_packets){
@@ -220,7 +214,7 @@ void hci_dump_packet(uint8_t packet_type, uint8_t in, uint8_t *packet, uint16_t 
             uint16_t milliseconds = curr_time.tv_usec / 1000;
             /* Print the formatted time, in seconds, followed by a decimal point
              and the milliseconds. */
-            //printf ("%s.%03u] ", time_string, milliseconds);
+            printf ("%s.%03u] ", time_string, milliseconds);
             printf_packet(packet_type, in, packet, len);
             break;
         }
@@ -274,6 +268,14 @@ void hci_dump_packet(uint8_t packet_type, uint8_t in, uint8_t *packet, uint16_t 
         default:
             break;
     }
+#else
+
+// #ifdef HAVE_TICK
+//     uint32_t time_ms = btstack_run_loop_embedded_get_time_ms();
+//     printf("[%06u] ", time_ms);
+// #endif
+    printf_packet(packet_type, in, packet, len);
+
 #endif
 }
 
@@ -284,8 +286,7 @@ static int hci_dump_log_level_active(int log_level){
 }
 
 void hci_dump_log(int log_level, const char * format, ...){
-    if (!hci_dump_log_level_active(log_level))
-        return;
+    if (!hci_dump_log_level_active(log_level)) return;
 #ifdef HAVE_PARTICLE
     uint16_t i = 0;
     static uint8_t logf_buf[250];
@@ -306,14 +307,14 @@ void hci_dump_log(int log_level, const char * format, ...){
 #else
     va_list argptr;
     va_start(argptr, format);
-#ifdef EMBEDDED
+#ifdef HAVE_POSIX_FILE_IO
+    int len = vsnprintf(log_message_buffer, sizeof(log_message_buffer), format, argptr);
+    hci_dump_packet(LOG_MESSAGE_PACKET, 0, (uint8_t*) log_message_buffer, len);
+#else
     printf("LOG -- ");
     vprintf(format, argptr);
     printf("\n");
-#else
-    int len = vsnprintf(log_message_buffer, sizeof(log_message_buffer), format, argptr);
-    hci_dump_packet(LOG_MESSAGE_PACKET, 0, (uint8_t*) log_message_buffer, len);
-#endif    
+#endif
     va_end(argptr);
 #endif
 }
@@ -331,10 +332,10 @@ void hci_dump_log_P(int log_level, PGM_P format, ...){
 #endif
 
 void hci_dump_close(void){
-#ifndef EMBEDDED
+#ifdef HAVE_POSIX_FILE_IO
     close(dump_file);
-    dump_file = -1;
 #endif
+    dump_file = -1;
 }
 
 void hci_dump_enable_log_level(int log_level, int enable){

@@ -6,13 +6,14 @@
  * Include Files
  */
 #include "btstack.h"
-#include "bt_control_bcm.h"
-#include "btstack-config.h"
+#include "btstack_chipset_bcm.h"
+#include "btstack_config.h"
 #include "hci_dump.h"
-#include "run_loop_wiced.h"
+#include "btstack_run_loop_wiced.h"
 
 #include "btstack_hal.h"
 #include "wlan_hal.h"
+#include "usb_hal.h"
 
 typedef enum gattAction {
     gattActionWrite,
@@ -48,7 +49,7 @@ static uint8_t hci_init_flag = 0;
 static uint16_t le_peripheral_todos = 0;
 
 /**@brief connect timeout. */
-static timer_source_t connection_timer;
+static btstack_timer_source_t connection_timer;
 
 /**@brief Gatt client. */
 static uint16_t gatt_client_id;
@@ -62,12 +63,27 @@ static bd_addr_t public_bd_addr;
 static uint16_t (*gattReadCallback)(uint16_t handle, uint8_t * buffer, uint16_t buffer_size);
 static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size);
 
+static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement) = NULL;
 static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
 static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
 
 /**
  * Function Declare
  */
+
+/**
+ * @brief Hardware error handler.
+ */
+void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
+{
+    report->advEventType = data[2];
+    report->peerAddrType = data[3];
+    report->rssi         = data[10];
+    report->advDataLen   = data[11];
+    memcpy(report->advData, &data[12], report->advDataLen);
+    bt_flip_addr(report->peerAddr, &data[4]);
+}
+
 /**
  * @brief Hardware error handler.
  */
@@ -150,7 +166,11 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     break;
 
                 case GAP_LE_ADVERTISING_REPORT: {
-
+                    if(bleAdvertismentCallback) {
+                        advertisementReport_t report;
+                        paseAdvertisemetReport(&report, packet);
+                        (*bleAdvertismentCallback)(&report);
+                    }
                     break;
                 }
 
@@ -167,7 +187,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                         case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
                             handle = READ_BT_16(packet, 4);
                             log_info("Connection complete, handle 0x%04x\n", handle);
-                            run_loop_remove_timer(&connection_timer);
+                            btstack_run_loop_remove_timer(&connection_timer);
                             if (!bleDeviceConnectedCallback)
                                 break;
                             if (packet[3]){
@@ -254,9 +274,8 @@ void hal_btstack_init(void)
     {
         wlan_activate();
 
-        have_custom_addr = false;
         // reset handler
-        //bleAdvertismentCallback = NULL;
+        bleAdvertismentCallback = NULL;
         bleDeviceConnectedCallback = NULL;
         bleDeviceDisconnectedCallback = NULL;
         //gattServiceDiscoveredCallback = NULL;
@@ -266,12 +285,13 @@ void hal_btstack_init(void)
         att_db_util_init();
 
         btstack_memory_init();
-        run_loop_init(run_loop_wiced_get_instance());
+        btstack_run_loop_init(btstack_run_loop_wiced_get_instance());
 
-        hci_transport_t    * transport = hci_transport_h4_wiced_instance();
-        bt_control_t       * control   = bt_control_bcm_instance();
+        const hci_transport_t   * transport = hci_transport_h4_instance();
         remote_device_db_t * remote_db = (remote_device_db_t *) &remote_device_db_memory;
-        hci_init(transport, (void*)&hci_uart_config, control, remote_db);
+        hci_init(transport, (void*)&hci_uart_config, remote_db);
+
+        hci_set_chipset(btstack_chipset_bcm_instance());
 
         if (have_custom_addr){
             hci_set_bd_addr(public_bd_addr);
@@ -292,21 +312,13 @@ void hal_btstack_init(void)
         gatt_client_init();
         gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
 
-        // setup advertisements params
-        uint16_t adv_int_min = 0x0030;
-        uint16_t adv_int_max = 0x0030;
-        uint8_t adv_type = 0;
-        bd_addr_t null_addr;
-        memset(null_addr, 0, 6);
-        gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
-
         // turn on!
         btstack_state = 0;
         hci_power_control(HCI_POWER_ON);
 
         // poll until working
         while (btstack_state != HCI_STATE_WORKING){
-            run_loop_execute();
+            btstack_run_loop_execute();
         }
         hci_init_flag = 1;
     }
@@ -316,8 +328,9 @@ void hal_btstack_deInit(void)
 {
     if(hci_init_flag)
     {
+        have_custom_addr = false;
         hci_close();
-        run_loop_deInit();
+        btstack_run_loop_deInit();
     }
     hci_init_flag = 0;
 }
@@ -327,7 +340,7 @@ void hal_btstack_deInit(void)
  */
 void hal_btstack_loop_execute(void)
 {
-    run_loop_execute();
+    btstack_run_loop_execute();
 }
 
 
@@ -339,27 +352,27 @@ void hal_btstack_loop_execute(void)
  */
 void hal_btstack_setTimer(hal_timer_source_t *ts, uint32_t timeout_in_ms)
 {
-    run_loop_set_timer((timer_source_t *)ts, timeout_in_ms);
+    btstack_run_loop_set_timer((btstack_timer_source_t *)ts, timeout_in_ms);
 }
 
 void hal_btstack_setTimerHandler(hal_timer_source_t *ts, void (*process)(void *_ts))
 {
-    run_loop_set_timer_handler((timer_source_t *)ts, process);
+    btstack_run_loop_set_timer_handler((btstack_timer_source_t *)ts, process);
 }
 
 void hal_btstack_addTimer(hal_timer_source_t *timer)
 {
-    run_loop_add_timer((timer_source_t *)timer);
+    btstack_run_loop_add_timer((btstack_timer_source_t *)timer);
 }
 
 int hal_btstack_removeTimer(hal_timer_source_t *timer)
 {
-    return run_loop_remove_timer((timer_source_t *)timer);
+    return btstack_run_loop_remove_timer((btstack_timer_source_t *)timer);
 }
 
 uint32_t hal_btstack_getTimeMs(void)
 {
-    return run_loop_get_time_ms();
+    return btstack_run_loop_get_time_ms();
 }
 
 /**
@@ -381,15 +394,42 @@ void hal_btstack_enablePacketLogger(void)
 /***************************************************************
  * Gap API
 ***************************************************************/
+
+
+void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, addr_t addr)
+{
+    hci_le_advertisement_address(addr_type, addr);
+}
+
+/**
+ * @brief Set mode of random address.
+ *
+ * @param[in]  random_address_type
+ */
+void hal_btstack_setRandomAddressMode(uint8_t random_address_type)
+{
+    gap_random_address_set_mode((gap_random_address_type_t)random_address_type);
+}
+
+/**
+ * @brief Set random address.
+ *
+ * @param[in]  addr
+ */
+void hal_btstack_setRandomAddr(addr_t addr)
+{
+    gap_random_address_set(addr);
+}
+
 /**
  * @brief Set public bd address.
  *
  * @param[in]  public_bd_addr
  */
-void hal_btstack_setPublicBdAddr(addr_t public_bd_addr)
+void hal_btstack_setPublicBdAddr(addr_t addr)
 {
     have_custom_addr = true;
-    memcpy(public_bd_addr, public_bd_addr ,6);
+    memcpy(public_bd_addr, addr ,6);
 }
 
 /**
@@ -470,10 +510,10 @@ void hal_btstack_setDisconnectedCallback(void (*callback)(uint16_t handle))
 /**
  * @brief Disconnect by peripheral.
  */
-static timer_source_t disconnect_time;
+static btstack_timer_source_t disconnect_time;
 static uint16_t disconnect_handle = 0xFFFF;
 
-static void disconnect_task(struct timer *ts)
+static void disconnect_task(struct btstack_timer_source *ts)
 {
     if(disconnect_handle != 0xFFFF)
         gap_disconnect(disconnect_handle);
@@ -484,8 +524,8 @@ void hal_btstack_disconnect(uint16_t handle)
 {
     disconnect_handle = handle;
     disconnect_time.process = &disconnect_task;
-    run_loop_set_timer(&disconnect_time, 20);
-    run_loop_add_timer(&disconnect_time);
+    btstack_run_loop_set_timer(&disconnect_time, 20);
+    btstack_run_loop_add_timer(&disconnect_time);
 }
 
 /***************************************************************
@@ -498,7 +538,7 @@ void hal_btstack_disconnect(uint16_t handle)
  */
 int hal_btstack_attServerCanSend(void)
 {
-    return att_server_can_send();
+    return att_server_can_send_packet_now();
 }
 
 /**
@@ -626,4 +666,13 @@ void hal_btstack_stopScanning(void)
 {
     le_central_stop_scan();
 }
+
+/**
+ * @brief Set advertisement report callback for scanning device.
+ */
+void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report))
+{
+    bleAdvertismentCallback = cb;
+}
+
 
