@@ -41,15 +41,15 @@
 //
 // *****************************************************************************
 
-#include "btstack-config.h"
+#include "btstack_config.h"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "hci_cmds.h"
-#include "run_loop.h"
+#include "hci_cmd.h"
+#include "btstack_run_loop.h"
 
 #include "hci.h"
 #include "btstack_memory.h"
@@ -131,14 +131,26 @@ static void emit_event(uint8_t event_subtype, uint8_t value){
     event[3] = value; // status 0 == OK
     (*hsp_hs_callback)(event, sizeof(event));
 }
+
+static void emit_event_audio_connected(uint8_t status, uint16_t handle){
+    if (!hsp_hs_callback) return;
+    uint8_t event[6];
+    event[0] = HCI_EVENT_HSP_META;
+    event[1] = sizeof(event) - 2;
+    event[2] = HSP_SUBEVENT_AUDIO_CONNECTION_COMPLETE;
+    event[3] = status;
+    bt_store_16(event, 4, handle);
+    (*hsp_hs_callback)(event, sizeof(event));
+}
+
 // remote audio volume control
 // AG +VGM=13 [0..15] ; HS AT+VGM=6 | AG OK
 
 static int hsp_hs_send_str_over_rfcomm(uint16_t cid, const char * command){
     if (!rfcomm_can_send_packet_now(rfcomm_cid)) return 1;
-    int err = rfcomm_send_internal(cid, (uint8_t*) command, strlen(command));
+    int err = rfcomm_send(cid, (uint8_t*) command, strlen(command));
     if (err){
-        printf("rfcomm_send_internal -> error 0X%02x", err);
+        printf("rfcomm_send -> error 0X%02x", err);
     }
     return err;
 }
@@ -448,7 +460,8 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
             uint8_t air_mode = packet[index];
 
             if (status != 0){
-                log_error("(e)SCO Connection is not established, status %u", status);
+                log_error("(e)SCO Connection failed, status %u", status);
+                emit_event_audio_connected(status, sco_handle);
                 break;
             }
             switch (link_type){
@@ -479,7 +492,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
             hsp_hs_callback(packet, size);
 
             hsp_state = HSP_ACTIVE;
-            emit_event(HSP_SUBEVENT_AUDIO_CONNECTION_COMPLETE, 0);
+            emit_event_audio_connected(0, sco_handle);
             break;                
         }
 
@@ -490,7 +503,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
             bt_flip_addr(event_addr, &packet[2]); 
             rfcomm_cid = READ_BT_16(packet, 9);
             printf("RFCOMM channel %u requested for %s\n", packet[8], bd_addr_to_str(event_addr));
-            rfcomm_accept_connection_internal(rfcomm_cid);
+            rfcomm_accept_connection(rfcomm_cid);
             
             hsp_state = HSP_W4_RFCOMM_CONNECTED;
             break;

@@ -1,34 +1,38 @@
+//
+// btstack_config.h for WICED port
+//
+
 #ifndef __BTSTACK_CONFIG
 #define __BTSTACK_CONFIG
 
-#define EMBEDDED
-
-#define HAVE_PARTICLE
-
+// Port related features
+#define HAVE_BZERO
+#define HAVE_EHCILL
+// #define HAVE_SCO
+#define HAVE_TIME_MS
 #define WICED_BT_UART_MANUAL_CTS_RTS
 
-#define HAVE_BLE
+// BTstack features that can be enabled
+#define ENABLE_BLE
+#define ENABLE_CLASSIC
 
 #define HAVE_INIT_SCRIPT
-#define HAVE_BZERO
-#define HAVE_TIME_MS
+#define HAVE_PARTICLE
 
-#define HAVE_EHCILL
-
-#define HAVE_HCI_DUMP
+#define ENABLE_LOG_INTO_HCI_DUMP
 #define ENABLE_LOG_INFO
-#define ENABLE_LOG_ERROR
 #define ENABLE_LOG_DEBUG
-
-#define HCI_ACL_PAYLOAD_SIZE 52
+#define ENABLE_LOG_ERROR
 
 #define HCI_INIT_BAUDRATE    115200
 #define HCI_MAIN_BAUDRATE    115200
 
-// 
+// BTstack configuration. buffers, sizes, ...
+#define HCI_ACL_PAYLOAD_SIZE 200
+
 #define MAX_SPP_CONNECTIONS 1
-#define MAX_NO_GATT_CLIENTS 0
-#define MAX_NO_GATT_SUBCLIENTS 0
+#define MAX_NO_GATT_CLIENTS 1
+#define MAX_NO_GATT_SUBCLIENTS 1
 #define MAX_NO_HCI_CONNECTIONS MAX_SPP_CONNECTIONS
 #define MAX_NO_L2CAP_SERVICES  2
 #define MAX_NO_L2CAP_CHANNELS  (1+MAX_SPP_CONNECTIONS)
@@ -44,6 +48,6 @@
 #define MAX_NO_WHITELIST_ENTRIES 1
 #define MAX_NO_SM_LOOKUP_ENTRIES 3
 #define MAX_NO_SERVICE_RECORD_ITEMS 1
-#define MAX_ATT_DB_SIZE 500
+#define MAX_ATT_DB_SIZE 600
 
 #endif

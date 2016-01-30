@@ -36,42 +36,33 @@
  */
 
 /*
- *  run_loop_private.h
+ * btstack_run_loop_wiced.h
  *
- *  Created by Matthias Ringwald on 6/6/09.
+ * Functions relevant for BTstack WICED port 
  */
 
-#ifndef __RUN_LOOP_PRIVATE_H
-#define __RUN_LOOP_PRIVATE_H
+#ifndef __btstack_run_loop_WICED_H
+#define __btstack_run_loop_WICED_H
 
-#include "run_loop.h"
+#include "btstack_config.h"
+#include "btstack_run_loop.h"
+#include "wiced.h"
 
-#ifdef HAVE_TIME
-#include <sys/time.h>
-#endif
+/**
+ * @brief Provide btstack_run_loop_posix instance for use with btstack_run_loop_init
+ */
+const btstack_run_loop_t * btstack_run_loop_wiced_get_instance(void);
 
-#if defined __cplusplus
-extern "C" {
-#endif
+/*
+ * @brief Execute code on BTstack run loop. Can be used to control BTstack from a different thread
+ */
+void btstack_run_loop_wiced_execute_code_on_main_thread(wiced_result_t (*fn)(void *arg), void * arg);
 
-// 
-void run_loop_timer_dump(void);
-
-// internal use only
-struct run_loop {
-	void (*init)(void);
-	void (*add_data_source)(data_source_t *dataSource);
-	int  (*remove_data_source)(data_source_t *dataSource);
-	void (*set_timer)(timer_source_t * timer, uint32_t timeout_in_ms);
-	void (*add_timer)(timer_source_t *timer);
-	int  (*remove_timer)(timer_source_t *timer); 
-	void (*execute)(void);
-	void (*dump_timer)(void);
-	uint32_t (*get_time_ms)(void);
-};
+void run_message_handler_register( void (*handle)(void) );
+/* API_END */
 
 #if defined __cplusplus
 }
 #endif
 
-#endif // __RUN_LOOP_PRIVATE_H
+#endif // __btstack_run_loop_WICED_H

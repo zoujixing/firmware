@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 BlueKitchen GmbH
+ * Copyright (C) 2016 BlueKitchen GmbH
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,33 +35,67 @@
  *
  */
 
-#ifndef __ANCS_CLIENT_LIB_H
-#define __ANCS_CLIENT_LIB_H
+/*
+ *  btstack_chipset.h
+ *
+ *  Chipset Driver - implements custom chipset initializtion and support proprietary extensions
+ *  to set UART baud rate, Bluetooth Address, and similar.
+ */
+
+#ifndef __BTSTACK_CHIPSET_H
+#define __BTSTACK_CHIPSET_H
+
+#include <stdint.h>
+#include "btstack_util.h"
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-#include <stdint.h>
+typedef enum {
+  BTSTACK_CHIPSET_DONE = 0,
+  BTSTACK_CHIPSET_VALID_COMMAND,
+  BTSTACK_CHIPSET_WARMSTART_REQUIRED,
+} btstack_chipset_result_t;
 
-/* API_START */
 
-typedef struct ancs_event{
-    uint8_t  type;
-    uint16_t handle;
-    uint16_t attribute_id;
-    const char * text;
-} ancs_event_t;
+typedef struct {
+    /**
+     * chipset driver name
+     */
+    const char * name;
 
-void ancs_client_init(void);
-void ancs_client_hci_event_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
-void ancs_client_register_callback(void (*handler)(ancs_event_t * event));
-const char * ancs_client_attribute_name_for_id(int id);
+    /**
+     * init driver
+     * allows to reset init script index
+     * @param transport_config
+     */
+    void (*init)(const void * transport_config);
 
-/* API_END */
+    /**
+     * support custom init sequences after RESET command
+     * @param  hci_cmd_buffer to store generated command
+     * @return result see btstack_chipset_result_t
+     */
+    btstack_chipset_result_t (*next_command)(uint8_t * hci_cmd_buffer); 
+
+    /**
+     * provide UART Baud Rate change command.
+     * @param baudrate
+     * @param hci_cmd_buffer to store generated command
+     */
+    void (*set_baudrate_command)(uint32_t baudrate, uint8_t *hci_cmd_buffer); 
+    
+    /** provide Set BD Addr command
+     * @param baudrate
+     * @param hci_cmd_buffer to store generated command
+     */
+    void (*set_bd_addr_command)(bd_addr_t addr, uint8_t *hci_cmd_buffer); 
+
+} btstack_chipset_t;
 
 #if defined __cplusplus
 }
 #endif
 
-#endif
+#endif // __BTSTACK_CHIPSET_H

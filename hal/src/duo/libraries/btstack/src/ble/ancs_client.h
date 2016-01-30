@@ -35,61 +35,32 @@
  *
  */
 
-/*
- *  bt_control.h
- *
- *  BT Control API -- allows BT Daemon to initialize and control differnt hardware
- *
- *  Created by Matthias Ringwald on 5/19/09.
- *
- */
-
-#ifndef __BT_CONTROL_H
-#define __BT_CONTROL_H
-
-#include <stdint.h>
-#include "utils.h"
+#ifndef __ANCS_CLIENT_H
+#define __ANCS_CLIENT_H
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
-    POWER_WILL_SLEEP = 1,
-    POWER_WILL_WAKE_UP
-} POWER_NOTIFICATION_t;
+#include <stdint.h>
 
-typedef struct {
-    int          (*on)   (void *config);  // <-- turn BT module on and configure
-    int          (*off)  (void *config);  // <-- turn BT module off
-    int          (*sleep)(void *config);  // <-- put BT module to sleep    - only to be called after ON
-    int          (*wake) (void *config);  // <-- wake BT module from sleep - only to be called after SLEEP
-    int          (*valid)(void *config);  // <-- test if hardware can be supported
-    const char * (*name) (void *config);  // <-- return hardware name
+/* API_START */
 
-    /** support for UART baud rate changes - cmd has to be stored in hci_cmd_buffer
-     * @return have command
-     */
-    int          (*baudrate_cmd)(void * config, uint32_t baudrate, uint8_t *hci_cmd_buffer); 
-    
-    /** support custom init sequences after RESET command - cmd has to be stored in hci_cmd_buffer
-      * @return have command
-      */
-    int          (*next_cmd)(void *config, uint8_t * hci_cmd_buffer); 
+typedef struct ancs_event{
+    uint8_t  type;
+    uint16_t handle;
+    uint16_t attribute_id;
+    const char * text;
+} ancs_event_t;
 
-    void         (*register_for_power_notifications)(void (*cb)(POWER_NOTIFICATION_t event));
+void ancs_client_init(void);
+void ancs_client_register_callback(void (*handler)(ancs_event_t * event));
+const char * ancs_client_attribute_name_for_id(int id);
 
-    void         (*hw_error)(void); 
-
-    /** support for vendor-specific way to set BD ADDR - cmd has to be stored in hci_cmd_buffer
-     * @return have command
-     */
-    int          (*set_bd_addr_cmd)(void * config, bd_addr_t addr, uint8_t *hci_cmd_buffer); 
-
-} bt_control_t;
+/* API_END */
 
 #if defined __cplusplus
 }
 #endif
 
-#endif // __BT_CONTROL_H
+#endif

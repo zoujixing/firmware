@@ -45,9 +45,9 @@ typedef enum {
     PROVISION_CMD_SCAN_REQUEST = 0xA0,
     PROVISION_CMD_CONFIG_AP_ENTRY,
     PROVISION_CMD_CONNECT_AP,
-	PROVISION_CMD_NOTIFY_AP,
+    PROVISION_CMD_NOTIFY_AP,
     PROVISION_CMD_NOTIFY_SYS_INFO,
-	PROVISION_CMD_NOTIFY_IP_CONFIG,
+    PROVISION_CMD_NOTIFY_IP_CONFIG,
 } BLEProvisionCmd_t;
 
 typedef enum {
@@ -127,18 +127,18 @@ static uint8_t  change[2]          = { 0x00, 0x00 };
 static uint8_t  conn_param[8]      = { 0x28, 0x00, 0x90, 0x01, 0x00, 0x00, 0x90, 0x01 };
 
 /* BLE connection variable */
-static uint16_t 	connect_handle = 0xFFFF;
+static uint16_t     connect_handle = 0xFFFF;
 static uint16_t     command_value_handle = 0x0000;
 static uint16_t     status_value_handle = 0x0000;
 
-static GapStatus  	connect_status = GapStatus_Disconnect;
+static GapStatus    connect_status = GapStatus_Disconnect;
 
 /* GATT attribute values */
 static uint8_t      command_value[20];
 static uint8_t      command_value_len;
-static uint16_t    	command_notify_flag = 0x0000;
-static uint8_t		status_value[1];
-static uint16_t		status_notify_flag = 0x0000;
+static uint16_t     command_notify_flag = 0x0000;
+static uint8_t      status_value[1];
+static uint16_t     status_notify_flag = 0x0000;
 
 //Advertising Data.
 static uint8_t adv_data[31] = {
@@ -207,6 +207,14 @@ void ble_provision_init(void)
         command_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_CMD_CHAR_UUID, PROPERTY_WRITE_WITHOUT_RESPONSE|PROPERTY_NOTIFY, command_value, command_value_len);
         status_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_STA_CHAR_UUID, PROPERTY_NOTIFY, status_value, 1);
 
+        // setup advertisements params
+        uint16_t adv_int_min = 0x0030;
+        uint16_t adv_int_max = 0x0030;
+        uint8_t adv_type = 0;
+        addr_t null_addr;
+        memset(null_addr, 1, 6);
+        hal_btstack_setAdvParams(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+
         // set ble advertising.
         hal_btstack_setAdvData(sizeof(adv_data), (uint8_t *)adv_data);
 
@@ -257,7 +265,7 @@ static void ble_provision_init_variables(void) {
 
 static void ble_provision_send_sys_info(void) {
 
-	DEBUG_D("Send system info. \r\n");
+    DEBUG_D("Send system info. \r\n");
 
     if((command_notify_flag == 0x0001) && (cmd_pipe_state == CMD_PIPE_AVAILABLE)) {
         uint16_t ver[4] = {0x0000, 0x0000, 0x0000, 0x0000};
@@ -306,7 +314,7 @@ static void ble_provision_send_ap_details(wiced_scan_result_t* record) {
             wiced_result_t result = wiced_dct_read_lock( (void**) &wifi_config, WICED_FALSE, DCT_WIFI_CONFIG_SECTION, 0, sizeof(*wifi_config));
             if (result == WICED_SUCCESS) {
                 if(!memcmp(wifi_config->stored_ap_list[0].details.BSSID.octet, record->BSSID.octet, 6))
-                	ble_tx_rx_stream[ble_tx_rx_stream_len-1] = AP_CONFIGURED;
+                    ble_tx_rx_stream[ble_tx_rx_stream_len-1] = AP_CONFIGURED;
             }
             wiced_dct_read_unlock(wifi_config, WICED_FALSE);
         }
@@ -411,17 +419,17 @@ static void ble_provision_notify(uint16_t attr_handle, uint8_t *pbuf, uint8_t le
                 status_value[0] = *pbuf;
             }
             hal_btstack_attServerSendNotify(attr_handle, &pbuf[i], tx_len);
-    	    i += tx_len;
+            i += tx_len;
 
             wiced_rtos_delay_milliseconds(20);
         }
-	}
+    }
     cmd_pipe_state = CMD_PIPE_AVAILABLE;
 }
 
 static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
 
-	BLEProvisionCmd_t provision_cmd = (BLEProvisionCmd_t)data[0];
+    BLEProvisionCmd_t provision_cmd = (BLEProvisionCmd_t)data[0];
 
     switch(provision_cmd)
     {
@@ -529,7 +537,7 @@ static void deviceDisconnectedCallback(uint16_t handle) {
 
     /* Connection released. Re-enable BLE connectability. */
     if(device_configured != WICED_TRUE)
-    	hal_btstack_startAdvertising();
+        hal_btstack_startAdvertising();
 }
 
 static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t new_value_len) {
@@ -583,14 +591,14 @@ static uint16_t gattReadCallback(uint16_t value_handle, uint8_t *value, uint16_t
     DEBUG_D("Read attribute callback.\r\n");
 
     if(value_handle == (command_value_handle+1)) {
-    	value = (uint8_t *)&command_notify_flag;    // Little Endian, so low byte sent first
+        value = (uint8_t *)&command_notify_flag;    // Little Endian, so low byte sent first
         characteristic_len = sizeof(command_notify_flag);
     }
     else if(value_handle == (status_value_handle+1)) {
-    	value = (uint8_t *)&status_notify_flag;
+        value = (uint8_t *)&status_notify_flag;
         characteristic_len = sizeof(status_notify_flag);
     }
-    else if(command_value_handle == value_handle) {
+    if(command_value_handle == value_handle) {
         memcpy(value, command_value, command_value_len);
         characteristic_len = command_value_len;
     }

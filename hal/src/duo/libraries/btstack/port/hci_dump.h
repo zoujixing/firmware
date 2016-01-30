@@ -93,7 +93,7 @@ __attribute__ ((format (__printf__, 2, 3)));
 ;
 
 /*
- * @brief
+ * @brief 
  */
 void hci_dump_enable_log_level(int log_level, int enable);
 

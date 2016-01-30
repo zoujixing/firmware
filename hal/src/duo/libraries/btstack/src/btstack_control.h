@@ -36,36 +36,38 @@
  */
 
 /*
- * run_loop_wiced.h
+ *  btstack_control.h
  *
- * Functions relevant for BTstack WICED port 
+ *  BTstack Bluetooth Hardware Control API -- allows HCI to manage Bluetooth chipsets via direct hardware controls
+ *
  */
 
-#ifndef __RUN_LOOP_WICED_H
-#define __RUN_LOOP_WICED_H
+#ifndef __BTSTACK_CONTROL_H
+#define __BTSTACK_CONTROL_H
 
-#include "btstack-config.h"
-#include "run_loop.h"
-//#include "wiced.h"
+#include <stdint.h>
+#include "btstack_util.h"
 
 #if defined __cplusplus
 extern "C" {
 #endif
-/**
- * @brief Provide run_loop_posix instance for use with run_loop_init
- */
-const run_loop_t * run_loop_wiced_get_instance(void);
 
-/*
- * @brief Execute code on BTstack run loop. Can be used to control BTstack from a different thread
- */
-void run_loop_wiced_execute_code_on_main_thread(uint32_t (*fn)(void *arg), void * arg);
+typedef enum {
+    POWER_WILL_SLEEP = 1,
+    POWER_WILL_WAKE_UP
+} POWER_NOTIFICATION_t;
 
-void run_message_handler_register( void (*handle)(void) );
-/* API_END */
+typedef struct {
+	void (*init) (const void *config);
+    int  (*on)   (void);  // <-- turn BT module on and configure
+    int  (*off)  (void);  // <-- turn BT module off
+    int  (*sleep)(void);  // <-- put BT module to sleep    - only to be called after ON
+    int  (*wake) (void);  // <-- wake BT module from sleep - only to be called after SLEEP
+    void (*register_for_power_notifications)(void (*cb)(POWER_NOTIFICATION_t event));
+} btstack_control_t;
 
 #if defined __cplusplus
 }
 #endif
 
-#endif // __RUN_LOOP_WICED_H
+#endif // __BTSTACK_CONTROL_H

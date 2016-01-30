@@ -1,4 +1,4 @@
-/*
+const /*
  * Copyright (C) 2015 BlueKitchen GmbH
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,16 +38,17 @@
 /*
  *  hci_h4_transport_wiced.c
  *
- *  HCI Transport API implementation for basic H4 protocol for use with run_loop_wiced.c
+ *  HCI Transport API implementation for basic H4 protocol for use with btstack_run_loop_wiced.c
  */
 
-#include "btstack-config.h"
-#include "run_loop_wiced.h"
+#include "btstack_config.h"
+#include "btstack_run_loop_wiced.h"
 
 #include "btstack_debug.h"
 #include "hci.h"
 #include "hci_transport.h"
-//#include "source/platform_bluetooth.h"
+//#include "platform_bluetooth.h"
+
 //#include "wiced.h"
 
 #include <stdio.h>
@@ -57,17 +58,16 @@
 #include "gpio_hal.h"
 #include "delay_hal.h"
 
-
 #define  PACKET_RECEIVE_TIMEOUT  0x0000FFFF
 
 static void dummy_handler(uint8_t packet_type, uint8_t *packet, uint16_t size); 
 
 typedef struct hci_transport_h4 {
     hci_transport_t transport;
-    data_source_t *ds;
+    btstack_data_source_t *ds;
     int uart_fd;    // different from ds->fd for HCI reader thread
     /* power management support, e.g. used by iOS */
-    timer_source_t sleep_timer;
+    btstack_timer_source_t sleep_timer;
 } hci_transport_h4_t;
 
 typedef enum {
@@ -97,6 +97,7 @@ static uint8_t          packet_offset;
 static uint16_t         packet_payload_len;
 static uint32_t         timeout;
 static uint8_t          send_packet_finish;
+
 
 void message_handle(void)
 {
@@ -194,9 +195,9 @@ void message_handle(void)
             // When handle packet, set RTS HIGH.
             HAL_GPIO_Write(BT_RTS, 1);
             //log_info("PACEKT: 0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x ", hci_packet[0],hci_packet[1],hci_packet[2],hci_packet[3],hci_packet[4],hci_packet[5]);
-            
+
             packet_handler(hci_packet[0], &hci_packet[1], (packet_offset-1));
-            
+
             //log_info("packet handler over");
             // Start a new packet received.
             pkt_status = PKT_TYPE;
@@ -209,10 +210,11 @@ void message_handle(void)
 }
 
 static int h4_set_baudrate(uint32_t baudrate){
+
     log_info("h4_set_baudrate");
     HAL_GPIO_Write(BT_RTS, 1);
     HAL_Delay_Milliseconds(5);
-    
+
     //HAL_HCI_USART_Set_BaudRate(HAL_HCI_USART_SERIAL6, baudrate);
     
     // Wait for CTS is LOW.
@@ -225,54 +227,58 @@ static int h4_set_baudrate(uint32_t baudrate){
     return 0;
 }
 
-static int h4_open(void *transport_config){
-    HAL_HCI_USART_Init(HAL_HCI_USART_SERIAL6, &ring_rx_buffer, &ring_tx_buffer);
-    // configure HOST and DEVICE WAKE PINs
-    HAL_Pin_Mode(BT_HOST_WK, INPUT_PULLUP);
-    HAL_Pin_Mode(BT_DEVICE_WK, OUTPUT);
-    HAL_GPIO_Write(BT_DEVICE_WK, 0);
-    HAL_Delay_Milliseconds(100);
-    
-#ifdef WICED_BT_UART_MANUAL_CTS_RTS    
-    // configure RTS pin as output and set to high
-    HAL_Pin_Mode(BT_RTS, OUTPUT);
-    HAL_GPIO_Write(BT_RTS, 1);
-    // configure CTS to input, pull-up
-    HAL_Pin_Mode(BT_CTS, INPUT_PULLUP);
-#endif
+static void h4_init(const void *transport_config)
+{
 
-    HAL_HCI_USART_Begin(HAL_HCI_USART_SERIAL6, 115200);
-    // reset Bluetooth
-    HAL_Pin_Mode(BT_POWER, OUTPUT);
-    HAL_GPIO_Write(BT_POWER, 0);
-    HAL_Delay_Milliseconds(50);
-    HAL_GPIO_Write(BT_POWER, 1);
-    
-    run_message_handler_register( message_handle );
-    
-    pkt_status = PKT_TYPE;
-    // tx is ready
-    send_packet_finish = 0;
-    tx_worker_data_size = 0;
-    
-    // Wait for CTS is LOW.
-    HAL_GPIO_Write(BT_RTS, 0);
-    HAL_Delay_Milliseconds(1);
-    while(HAL_GPIO_Read(BT_CTS) == 1)
-    {
-        HAL_Delay_Milliseconds(1);
-    }
-    
-    return 0;
 }
 
-static int h4_close(void *transport_config){
+static int h4_open(){
+	HAL_HCI_USART_Init(HAL_HCI_USART_SERIAL6, &ring_rx_buffer, &ring_tx_buffer);
+	// configure HOST and DEVICE WAKE PINs
+	HAL_Pin_Mode(BT_HOST_WK, INPUT_PULLUP);
+	HAL_Pin_Mode(BT_DEVICE_WK, OUTPUT);
+	HAL_GPIO_Write(BT_DEVICE_WK, 0);
+	HAL_Delay_Milliseconds(100);
+
+#ifdef WICED_BT_UART_MANUAL_CTS_RTS
+	// configure RTS pin as output and set to high
+	HAL_Pin_Mode(BT_RTS, OUTPUT);
+	HAL_GPIO_Write(BT_RTS, 1);
+	// configure CTS to input, pull-up
+	HAL_Pin_Mode(BT_CTS, INPUT_PULLUP);
+#endif
+
+	HAL_HCI_USART_Begin(HAL_HCI_USART_SERIAL6, 115200);
+	// reset Bluetooth
+	HAL_Pin_Mode(BT_POWER, OUTPUT);
+	HAL_GPIO_Write(BT_POWER, 0);
+	HAL_Delay_Milliseconds(50);
+	HAL_GPIO_Write(BT_POWER, 1);
+
+	run_message_handler_register( message_handle );
+
+	pkt_status = PKT_TYPE;
+	// tx is ready
+	send_packet_finish = 0;
+	tx_worker_data_size = 0;
+
+	// Wait for CTS is LOW.
+	HAL_GPIO_Write(BT_RTS, 0);
+	HAL_Delay_Milliseconds(1);
+	while(HAL_GPIO_Read(BT_CTS) == 1)
+	{
+		HAL_Delay_Milliseconds(1);
+	}
+
+	return 0;
+}
+
+static int h4_close(){
     // not implementd
     return 0;
 }
 
 static int h4_send_packet(uint8_t packet_type, uint8_t * data, int size){
-    
     // After handle, set RTS LOW.
     HAL_GPIO_Write(BT_RTS, 0);
     while(HAL_GPIO_Read(BT_CTS) == 1)
@@ -288,17 +294,10 @@ static int h4_send_packet(uint8_t packet_type, uint8_t * data, int size){
     tx_worker_data_buffer = data;
     tx_worker_data_size = size;
     // send packet as single block
-    //wiced_rtos_send_asynchronous_event(&tx_worker_thread, &h4_tx_worker_send_packet, NULL);    
-    //log_info("data: 0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x ", tx_worker_data_buffer[0],tx_worker_data_buffer[1],tx_worker_data_buffer[2],tx_worker_data_buffer[3],tx_worker_data_buffer[4],tx_worker_data_buffer[5]);
     HAL_HCI_USART_Write_Buffer(HAL_HCI_USART_SERIAL6, tx_worker_data_buffer, tx_worker_data_size);
-    //log_info("data finish");
-    //HAL_Delay_Milliseconds(10);
-    //tx_worker_data_size = 0;
+
     send_packet_finish = 1;
-    // notify upper stack that it might be possible to send again
-    //uint8_t event[] = { DAEMON_EVENT_HCI_PACKET_SENT, 0};
-    //packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
-    
+
     return 0;
 }
 
@@ -318,15 +317,15 @@ static void dummy_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){
 }
 
 // get h4 singleton
-hci_transport_t * hci_transport_h4_wiced_instance() {
+const hci_transport_t * hci_transport_h4_instance() {
     if (hci_transport_h4 == NULL) {
         hci_transport_h4 = (hci_transport_h4_t*)malloc( sizeof(hci_transport_h4_t));
         hci_transport_h4->ds                                      = NULL;
+        hci_transport_h4->transport.init                          = h4_init;
         hci_transport_h4->transport.open                          = h4_open;
         hci_transport_h4->transport.close                         = h4_close;
         hci_transport_h4->transport.send_packet                   = h4_send_packet;
         hci_transport_h4->transport.register_packet_handler       = h4_register_packet_handler;
-        hci_transport_h4->transport.get_transport_name            = h4_get_transport_name;
         hci_transport_h4->transport.set_baudrate                  = h4_set_baudrate;
         hci_transport_h4->transport.can_send_packet_now           = h4_can_send_packet_now;
     }

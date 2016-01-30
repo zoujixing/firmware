@@ -54,6 +54,17 @@ typedef enum BLEStatus {
 #define ADDR_LEN 6
 typedef uint8_t addr_t[ADDR_LEN];
 
+/**@brief BLE advertising report data. */
+typedef struct{
+    uint8_t peerAddrType;
+    addr_t  peerAddr;
+    int     rssi;
+    uint8_t advEventType;
+    uint8_t advDataLen;
+    uint8_t advData[31];
+}advertisementReport_t;
+
+
 
 /**@brief Device API */
 void hal_btstack_init(void);
@@ -71,7 +82,10 @@ void hal_btstack_debugError(uint8_t flag);
 void hal_btstack_enablePacketLogger(void);
 
 /**@brief Gap API */
-void hal_btstack_setPublicBdAddr(addr_t public_bd_addr);
+void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, addr_t addr);
+void hal_btstack_setRandomAddressMode(uint8_t random_address_type);
+void hal_btstack_setRandomAddr(addr_t addr);
+void hal_btstack_setPublicBdAddr(addr_t addr);
 void hal_btstack_setLocalName(const char *local_name);
 void hal_btstack_setAdvParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy);
 void hal_btstack_setAdvData(uint16_t size, uint8_t *data);
@@ -104,6 +118,8 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 /**@brief Gatt client API */
 void hal_btstack_startScanning(void);
 void hal_btstack_stopScanning(void);
+
+void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report));
 
 
 #ifdef __cplusplus

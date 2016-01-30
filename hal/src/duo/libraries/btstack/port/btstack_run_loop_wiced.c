@@ -36,28 +36,26 @@
  */
 
 /*
- *  run_loop_wiced.c
+ *  btstack_run_loop_wiced.c
  *
  *  Run loop for Broadcom WICED SDK which currently supports FreeRTOS and ThreadX
  *  WICED 3.3.1 does not support Event Flags on FreeRTOS so a queue is used instead
  */
 
+#include "wiced.h"
+
 #include <stddef.h> // NULL
 
-#include "bk_linked_list.h"
+#include "btstack_linked_list.h"
 #include "btstack_debug.h"
-#include "run_loop.h"
-#include "run_loop_private.h"
-
-#include "run_loop_wiced.h"
-
+#include "btstack_run_loop.h"
+#include "btstack_run_loop_wiced.h"
+ 
 #include "usb_hal.h"
 #include "timer_hal.h"
 
-#define WICED_NEVER_TIMEOUT 0xFFFFFFFF
- 
 typedef struct function_call {
-    uint32_t (*fn)(void * arg);
+    wiced_result_t (*fn)(void * arg);
     void * arg;
 } function_call_t;
 
@@ -65,12 +63,13 @@ typedef void (*handle_t)(void);
 
 static handle_t messageHandle;
 
-static const run_loop_t run_loop_wiced;
+static const btstack_run_loop_t btstack_run_loop_wiced;
+
 
 // the run loop
-static bk_linked_list_t timers;
+static btstack_linked_list_t timers;
 
-static uint32_t run_loop_wiced_get_time_ms(void){
+static uint32_t btstack_run_loop_wiced_get_time_ms(void){
     //wiced_time_t time;
     //wiced_time_get_time(&time);
     //return time;
@@ -78,54 +77,54 @@ static uint32_t run_loop_wiced_get_time_ms(void){
 }
 
 // set timer
-static void run_loop_wiced_set_timer(timer_source_t *ts, uint32_t timeout_in_ms){
-    //ts->timeout = run_loop_wiced_get_time_ms() + timeout_in_ms + 1;
+static void btstack_run_loop_wiced_set_timer(btstack_timer_source_t *ts, uint32_t timeout_in_ms){
+    //ts->timeout = btstack_run_loop_wiced_get_time_ms() + timeout_in_ms + 1;
     ts->timeout = HAL_Timer_Get_Milli_Seconds() + timeout_in_ms + 1;
 }
 
 /**
  * Add timer to run_loop (keep list sorted)
  */
-static void run_loop_wiced_add_timer(timer_source_t *ts){
-    linked_item_t *it;
-    for (it = (linked_item_t *) &timers; it->next ; it = it->next){
+static void btstack_run_loop_wiced_add_timer(btstack_timer_source_t *ts){
+    btstack_linked_item_t *it;
+    for (it = (btstack_linked_item_t *) &timers; it->next ; it = it->next){
         // don't add timer that's already in there
-        if ((timer_source_t *) it->next == ts){
-            log_error( "run_loop_timer_add error: timer to add already in list!");
+        if ((btstack_timer_source_t *) it->next == ts){
+            log_error( "btstack_run_loop_timer_add error: timer to add already in list!");
             return;
         }
-        if (ts->timeout < ((timer_source_t *) it->next)->timeout) {
+        if (ts->timeout < ((btstack_timer_source_t *) it->next)->timeout) {
             break;
         }
     }
     ts->item.next = it->next;
-    it->next = (linked_item_t *) ts;
+    it->next = (btstack_linked_item_t *) ts;
 }
 
 /**
  * Remove timer from run loop
  */
-static int run_loop_wiced_remove_timer(timer_source_t *ts){
-    return linked_list_remove(&timers, (linked_item_t *) ts);
+static int btstack_run_loop_wiced_remove_timer(btstack_timer_source_t *ts){
+    return btstack_linked_list_remove(&timers, (btstack_linked_item_t *) ts);
 }
 
-static void run_loop_wiced_dump_timer(void){
+static void btstack_run_loop_wiced_dump_timer(void){
 #ifdef ENABLE_LOG_INFO 
-    linked_item_t *it;
+    btstack_linked_item_t *it;
     int i = 0;
-    for (it = (linked_item_t *) timers; it ; it = it->next){
-        timer_source_t *ts = (timer_source_t*) it;
+    for (it = (btstack_linked_item_t *) timers; it ; it = it->next){
+        btstack_timer_source_t *ts = (btstack_timer_source_t*) it;
         log_info("timer %u, timeout %u\n", i, (unsigned int) ts->timeout);
     }
 #endif
 }
 
 // schedules execution similar to wiced_rtos_send_asynchronous_event for worker threads
-void run_loop_wiced_execute_code_on_main_thread(uint32_t (*fn)(void *arg), void * arg){
-    // function_call_t message;
-    // message.fn  = fn;
-    // message.arg = arg;
-    // wiced_rtos_push_to_queue(&run_loop_queue, &message, WICED_NEVER_TIMEOUT);
+void btstack_run_loop_wiced_execute_code_on_main_thread(wiced_result_t (*fn)(void *arg), void * arg){
+    //function_call_t message;
+    //message.fn  = fn;
+    //message.arg = arg;
+    //wiced_rtos_push_to_queue(&btstack_run_loop_queue, &message, WICED_NEVER_TIMEOUT);
 }
 
 void run_message_handler_register( void (*handle)(void) )
@@ -136,46 +135,46 @@ void run_message_handler_register( void (*handle)(void) )
 /**
  * Execute run_loop
  */
-static void run_loop_wiced_execute(void) {
-
-    if (timers) {
-        timer_source_t * ts = (timer_source_t *) timers;
-        uint32_t now = run_loop_wiced_get_time_ms();
-        if (ts->timeout < now){
-            //remove timer before processing it to allow handler to re-register with run loop
-            run_loop_remove_timer(ts);
-            //log_info("RL: timer %p\n", ts->process);
-            ts->process(ts);
-        }
-    }
-    
+static void btstack_run_loop_wiced_execute(void) {
+	// get next timeout
+	if (timers) {
+		btstack_timer_source_t * ts = (btstack_timer_source_t *) timers;
+		uint32_t now = btstack_run_loop_wiced_get_time_ms();
+		if (ts->timeout < now){
+			// remove timer before processing it to allow handler to re-register with run loop
+			btstack_run_loop_remove_timer(ts);
+			// printf("RL: timer %p\n", ts->process);
+			ts->process(ts);
+		}
+	}
+                
     if(messageHandle) {
         messageHandle();
     }
 }
 
-static void run_loop_wiced_run_loop_init(void){
+static void btstack_run_loop_wiced_btstack_run_loop_init(void){
     timers = NULL;
     messageHandle = NULL;
     // queue to receive events: up to 2 calls from transport, up to 3 for app
-    //wiced_rtos_init_queue(&run_loop_queue, "BTstack Run Loop", sizeof(function_call_t), 5);
+    //wiced_rtos_init_queue(&btstack_run_loop_queue, "BTstack Run Loop", sizeof(function_call_t), 5);
 }
 
 /**
- * @brief Provide run_loop_posix instance for use with run_loop_init
+ * @brief Provide btstack_run_loop_posix instance for use with btstack_run_loop_init
  */
-const run_loop_t * run_loop_wiced_get_instance(void){
-    return &run_loop_wiced;
+const btstack_run_loop_t * btstack_run_loop_wiced_get_instance(void){
+    return &btstack_run_loop_wiced;
 }
 
-static const run_loop_t run_loop_wiced = {
-    &run_loop_wiced_run_loop_init,
+static const btstack_run_loop_t btstack_run_loop_wiced = {
+    &btstack_run_loop_wiced_btstack_run_loop_init,
     NULL,
     NULL,
-    &run_loop_wiced_set_timer,
-    &run_loop_wiced_add_timer,
-    &run_loop_wiced_remove_timer,
-    &run_loop_wiced_execute,
-    &run_loop_wiced_dump_timer,
-    &run_loop_wiced_get_time_ms,
+    &btstack_run_loop_wiced_set_timer,
+    &btstack_run_loop_wiced_add_timer,
+    &btstack_run_loop_wiced_remove_timer,
+    &btstack_run_loop_wiced_execute,
+    &btstack_run_loop_wiced_dump_timer,
+    &btstack_run_loop_wiced_get_time_ms,
 };
