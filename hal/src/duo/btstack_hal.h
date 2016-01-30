@@ -1,6 +1,3 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
 
 #ifndef BTSTACK_HAL_H_
 #define BTSTACK_HAL_H_
@@ -64,7 +61,15 @@ typedef struct{
     uint8_t advData[31];
 }advertisementReport_t;
 
-
+typedef struct{
+	uint16_t adv_int_min;
+	uint16_t adv_int_max;
+	uint8_t adv_type;
+	uint8_t dir_addr_type;
+	uint8_t dir_addr[ADDR_LEN];
+	uint8_t channel_map;
+	uint8_t filter_policy;
+}advParams_t;
 
 /**@brief Device API */
 void hal_btstack_init(void);

@@ -1,12 +1,6 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
 
-/** @file
- *
- * Proximity Monitor Sample Application
- *
- */
+#ifndef HCI_USART_HAL_H_
+#define HCI_USART_HAL_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,3 +47,6 @@ int32_t HAL_HCI_USART_Read_Data(HAL_HCI_USART_Serial serial);
 #ifdef __cplusplus
 }
 #endif
+
+#endif
+

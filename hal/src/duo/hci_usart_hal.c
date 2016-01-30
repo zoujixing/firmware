@@ -1,6 +1,3 @@
-/*
- * $ Copyright Broadcom Corporation $
- */
 
 #include <string.h>
 #include <stdio.h>
