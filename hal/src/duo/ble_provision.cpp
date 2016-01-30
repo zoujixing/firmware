@@ -545,16 +545,16 @@ static int gattWriteCallback(uint16_t value_handle, uint8_t *new_value, uint16_t
     /* Client Characteristic Configuration Descriptor */
     if(value_handle == (command_value_handle+1)) {
         if(new_value_len >= 2) {
-            DEBUG_D("Enable command characteristic CCCD.\r\n");
             command_notify_flag = new_value[1];    // Low byte comes first
             command_notify_flag = (command_notify_flag<<8) + new_value[0];
+            DEBUG_D("Write command characteristic CCCD: %d\r\n", command_notify_flag);
         }
     }
     else if(value_handle == (status_value_handle+1)) {
         if(new_value_len >= 2) {
-            DEBUG_D("Enable status characteristic CCCD.\r\n");
             status_notify_flag = new_value[1];
             status_notify_flag = (status_notify_flag<<8) + new_value[0];
+            DEBUG_D("Write status characteristic CCCD: %d\r\n", status_notify_flag);
         }
     }
     /* Server characteristic attribute value */
