@@ -11,12 +11,16 @@ static uint32_t recieved_size = 0;
 static uint32_t addr_offset = 0;
 static bool ota_init = false;
 
-void Wireless_Update_Begin(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address)
+void Wireless_Update_Begin(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address, uint8_t file_store)
 {
 	recieved_size = 0;
 	addr_offset = 0;
 
-	fd.store = FileTransfer::Store::FIRMWARE;
+    if(file_store == 1)
+        fd.store = FileTransfer::Store::SYSTEM; // FAC firmware and WiFi firmware are stored in external flash
+    else
+        fd.store = FileTransfer::Store::FIRMWARE;
+	
 	fd.chunk_address = chunk_address;
 	fd.chunk_size = chunk_size;
 	fd.file_length = file_length;// Judge the length if valid or not

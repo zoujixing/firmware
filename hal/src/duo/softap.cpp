@@ -749,19 +749,20 @@ struct FileInfo {
     uint32_t file_length;
     uint32_t chunk_address;
     uint16_t chunk_size;
+    uint8_t  file_store;
 };
 
 class PrepareUpdateCommand  : public JSONRequestCommand {
-    static const char* const KEY[3];
+    static const char* const KEY[4];
     static const int OFFSET[];
     static const jsmntype_t TYPE[];
 
     FileInfo fileinfo;
 
-    void (*ota_begin_callback_)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address);
+    void (*ota_begin_callback_)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address, uint8_t file_store);
 
 public:
-    PrepareUpdateCommand(void (*ota_begin_callback)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address)) {
+    PrepareUpdateCommand(void (*ota_begin_callback)(uint32_t file_length, uint16_t chunk_size, uint32_t chunk_address, uint8_t file_store)) {
         ota_begin_callback_ = ota_begin_callback;
     }
 
@@ -786,6 +787,10 @@ protected:
         {
             *(uint16_t *)data = (uint16_t)atoi(str);
         }
+        else if(key == 3)
+        {
+            *(uint8_t *)data = (uint8_t)atoi(str);
+        }
 
         return true;
     }
@@ -798,19 +803,20 @@ protected:
     int process() {
         if(ota_begin_callback_!=NULL)
         {
-            ota_begin_callback_(fileinfo.file_length, fileinfo.chunk_size, fileinfo.chunk_address);
+            ota_begin_callback_(fileinfo.file_length, fileinfo.chunk_size, fileinfo.chunk_address, fileinfo.file_store);
         }
         return true;
     }
 };
 
-const char* const PrepareUpdateCommand::KEY[3] = { "file_length", "chunk_address", "chunk_size"};
+const char* const PrepareUpdateCommand::KEY[4] = { "file_length", "chunk_address", "chunk_size", "file_store"};
 const int PrepareUpdateCommand::OFFSET[] = {
                             offsetof(FileInfo, file_length),
                             offsetof(FileInfo, chunk_address),
-                            offsetof(FileInfo, chunk_size)
+                            offsetof(FileInfo, chunk_size),
+                            offsetof(FileInfo, file_store)
 };
-const jsmntype_t PrepareUpdateCommand::TYPE[3] = { JSMN_PRIMITIVE, JSMN_PRIMITIVE, JSMN_PRIMITIVE};
+const jsmntype_t PrepareUpdateCommand::TYPE[4] = { JSMN_PRIMITIVE, JSMN_PRIMITIVE, JSMN_PRIMITIVE, JSMN_PRIMITIVE};
 
 
 class FinishUpdateCommand : public JSONCommand {
@@ -850,6 +856,19 @@ protected:
         write_char(out, '}');
     }
 };
+
+
+class InvalidUserCommand : public JSONCommand {
+
+public:
+	InvalidUserCommand() {}
+
+protected:
+    int process() {
+        FLASH_InvalidCRC32(FLASH_INTERNAL, USER_FIRMWARE_IMAGE_LOCATION, FLASH_ModuleLength(FLASH_INTERNAL, USER_FIRMWARE_IMAGE_LOCATION));
+        return true;
+    }
+};
 #endif
 
 struct AllSoftAPCommands {
@@ -857,6 +876,7 @@ struct AllSoftAPCommands {
     PrepareUpdateCommand prepareUpdate;
     FinishUpdateCommand finishUpdate;
     CheckCredentialCommand checkCredential;
+    InvalidUserCommand invalidUser;
 #endif
     VersionCommand version;
     DeviceIDCommand deviceID;
@@ -1271,6 +1291,8 @@ class SimpleProtocolDispatcher
                 cmd = &commands_.finishUpdate;
             else if (!strcmp("check-credential", name))
                 cmd = &commands_.checkCredential;
+            else if (!strcmp("invalid-user", name))
+                cmd = &commands_.invalidUser;
 #endif
             else if (!strcmp("ant-internal", name))
                 wwd_wifi_select_antenna(WICED_ANTENNA_1);
