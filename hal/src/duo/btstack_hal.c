@@ -76,7 +76,7 @@ void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
 {
     report->advEventType = data[2];
     report->peerAddrType = data[3];
-    report->rssi         = data[10];
+    report->rssi         = data[10]-256;
     report->advDataLen   = data[11];
     memcpy(report->advData, &data[12], report->advDataLen);
     bt_flip_addr(report->peerAddr, &data[4]);
