@@ -13,7 +13,7 @@ MEMORY
 
        The value given here is the sum of system_static_ram_size and stack_size
     */
-    SRAM      (rwx) : ORIGIN = 0x20020000 - 48K, LENGTH = 48K
+    SRAM      (rwx) : ORIGIN = 0x20020000 - 50K, LENGTH = 50K
 }
 
 

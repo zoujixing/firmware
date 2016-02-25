@@ -50,4 +50,6 @@
 #define MAX_NO_SERVICE_RECORD_ITEMS 1
 #define MAX_ATT_DB_SIZE 600
 
+#define MAX_NO_NOTIFY_DATA_QUEUE 20
+
 #endif
