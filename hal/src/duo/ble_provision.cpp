@@ -223,10 +223,6 @@ void ble_provision_init(void)
     }
 }
 
-void ble_provision_loop(void) {
-    hal_btstack_loop_execute();
-}
-
 void ble_provision_finalize() {
     provision_status = PROVISION_STA_CONNECTED;
 
@@ -234,6 +230,7 @@ void ble_provision_finalize() {
         ble_provision_notify(status_value_handle, &provision_status, 1);
         wiced_rtos_delay_milliseconds(100);
         ble_provision_send_ip_config();
+        wiced_rtos_delay_milliseconds(500);
         hal_btstack_disconnect(connect_handle);
     }
 

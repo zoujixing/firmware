@@ -3,6 +3,7 @@
 /**
  * Include Files
  */
+#include "wiced.h"
 #include "btstack.h"
 #include "btstack_chipset_bcm.h"
 #include "btstack_config.h"
@@ -40,6 +41,22 @@ enum {
     SET_ADVERTISEMENT_ENABLED = 1 << 2,
 };
 
+/**@brief notify/indicate data node */
+typedef struct{
+	uint16_t handle;
+	uint8_t  data_flag_len; //7-bit:1 indicate,0 notify. 6~0-bit:length of data.
+	uint8_t  data[20];
+}hal_notifyData_t;
+
+/**@brief Queue for notify/indicate */
+typedef struct{
+	hal_notifyData_t queue[MAX_NO_NOTIFY_DATA_QUEUE];
+	uint8_t head;
+	uint8_t tail;
+}hal_notifyDataQueue_t;
+
+static hal_notifyDataQueue_t notify_queue={.head=0,.tail=0};
+
 /**@brief btstack state. */
 static int btstack_state;
 static uint8_t hci_init_flag = 0;
@@ -57,6 +74,12 @@ static gattAction_t gattAction;
 static bool have_custom_addr;
 static bd_addr_t public_bd_addr;
 
+
+static wiced_thread_t hal_btstack_thread_;
+static uint8_t hal_btstack_thread_quit=1;
+
+static void hal_stack_thread(uint32_t arg);
+
 /**@brief Gatt read/write callback handler. */
 static uint16_t (*gattReadCallback)(uint16_t handle, uint8_t * buffer, uint16_t buffer_size);
 static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size);
@@ -65,9 +88,24 @@ static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement)
 static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
 static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
 
+static uint8_t notify_queueFreeSize(void);
+static uint8_t notify_queneUsedSize(void);
+static uint8_t notify_queneWrite(hal_notifyData_t *dat);
+static uint8_t notify_queneRead(hal_notifyData_t *dat);
+
 /**
  * Function Declare
  */
+/**
+ * @brief Thread for BLE loop.
+ */
+void hal_stack_thread(uint32_t arg) {
+	while(!hal_btstack_thread_quit)
+	{
+		hal_btstack_loop_execute();
+	}
+	WICED_END_OF_CURRENT_THREAD( );
+}
 
 /**
  * @brief Hardware error handler.
@@ -163,14 +201,13 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
                     break;
 
-                case GAP_LE_ADVERTISING_REPORT: {
+                case GAP_LE_ADVERTISING_REPORT:
                     if(bleAdvertismentCallback) {
                         advertisementReport_t report;
                         paseAdvertisemetReport(&report, packet);
                         (*bleAdvertismentCallback)(&report);
                     }
                     break;
-                }
 
                 case HCI_EVENT_COMMAND_COMPLETE:
                     if (COMMAND_COMPLETE_EVENT(packet, hci_read_bd_addr)) {
@@ -310,6 +347,8 @@ void hal_btstack_init(void)
         gatt_client_init();
         gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
 
+        memset(&notify_queue, 0x00, sizeof(hal_notifyDataQueue_t));
+
         // turn on!
         btstack_state = 0;
         hci_power_control(HCI_POWER_ON);
@@ -318,6 +357,8 @@ void hal_btstack_init(void)
         while (btstack_state != HCI_STATE_WORKING){
             btstack_run_loop_execute();
         }
+        hal_btstack_thread_quit = 0;
+        wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
         hci_init_flag = 1;
     }
 }
@@ -329,6 +370,7 @@ void hal_btstack_deInit(void)
         have_custom_addr = false;
         hci_close();
         btstack_run_loop_deInit();
+        hal_btstack_thread_quit = 1;
     }
     hci_init_flag = 0;
 }
@@ -338,7 +380,21 @@ void hal_btstack_deInit(void)
  */
 void hal_btstack_loop_execute(void)
 {
-    btstack_run_loop_execute();
+	if(hci_init_flag)
+	{
+		if(notify_queneUsedSize() && att_server_can_send_packet_now())
+		{
+			hal_notifyData_t data;
+			notify_queneRead(&data);
+			if((data.data_flag_len & 0x80) == 0x00)
+			{
+				att_server_notify(data.handle, data.data, data.data_flag_len&0x7F);
+			}
+			else
+				att_server_indicate(data.handle, data.data, data.data_flag_len&0x7F);
+		}
+		btstack_run_loop_execute();
+	}
 }
 
 
@@ -516,6 +572,7 @@ static void disconnect_task(struct btstack_timer_source *ts)
     if(disconnect_handle != 0xFFFF)
         gap_disconnect(disconnect_handle);
     disconnect_handle = 0xFFFF;
+    memset(&notify_queue, 0x00, sizeof(hal_notifyDataQueue_t));
 }
 
 void hal_btstack_disconnect(uint16_t handle)
@@ -536,7 +593,9 @@ void hal_btstack_disconnect(uint16_t handle)
  */
 int hal_btstack_attServerCanSend(void)
 {
-    return att_server_can_send_packet_now();
+	if(!notify_queueFreeSize())
+		return 0;
+	return 1;
 }
 
 /**
@@ -552,7 +611,14 @@ int hal_btstack_attServerCanSend(void)
  */
 int hal_btstack_attServerSendNotify(uint16_t value_handle, uint8_t *value, uint16_t length)
 {
-    return att_server_notify(value_handle, value, length);
+	hal_notifyData_t data;
+	log_info("send notify \r\n");
+	data.handle        = value_handle;
+	data.data_flag_len = length;
+	memset(data.data, 0x00, 20);
+	memcpy(data.data, value,  length);
+
+	return notify_queneWrite(&data);
 }
 
 /**
@@ -566,7 +632,14 @@ int hal_btstack_attServerSendNotify(uint16_t value_handle, uint8_t *value, uint1
  */
 int hal_btstack_attServerSendIndicate(uint16_t value_handle, uint8_t *value, uint16_t length)
 {
-    return att_server_indicate(value_handle, value, length);
+	hal_notifyData_t data;
+
+	data.handle        = value_handle;
+	data.data_flag_len = length | 0x80;
+	memset(data.data, 0x00, 20);
+	memcpy(data.data, value,  length);
+
+	return notify_queneWrite(&data);
 }
 
 /**
@@ -673,4 +746,61 @@ void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *a
     bleAdvertismentCallback = cb;
 }
 
+/***************************************************************
+ * Other API
+***************************************************************/
+/**
+ * @brief check whether has available space.
+ *
+ * @return 0    : full
+ * 	       else : number of free.
+ */
+static uint8_t notify_queueFreeSize(void)
+{
+	return ( MAX_NO_NOTIFY_DATA_QUEUE - 1 - ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE));
+}
 
+/**
+ * @brief Check whether has data to be sent.
+ *
+ * @return 0    : empty
+ *         else : number of data.
+ */
+static uint8_t notify_queneUsedSize(void)
+{
+	return ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE);
+}
+
+/**
+ * @brief Put a notify data to queue.
+ *
+ * @return 0:FAIL.
+ *         1:SUCCESS.
+ */
+static uint8_t notify_queneWrite(hal_notifyData_t *dat)
+{
+	if(!notify_queueFreeSize())
+		return 0;
+
+	notify_queue.queue[notify_queue.head] = *dat;
+	notify_queue.head = (notify_queue.head + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+
+	return 1;
+}
+
+/**
+ * @brief Read a notify data from queue.
+ *
+ * @return 0:FAIL.
+ *         1:SUCCESS.
+ */
+static uint8_t notify_queneRead(hal_notifyData_t *dat)
+{
+	if(!notify_queneUsedSize())
+		return 0;
+
+	*dat = notify_queue.queue[notify_queue.tail];
+	notify_queue.tail = (notify_queue.tail + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+
+	return 1;
+}
