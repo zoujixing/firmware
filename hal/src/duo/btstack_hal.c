@@ -3,6 +3,7 @@
 /**
  * Include Files
  */
+#include "wiced.h"
 #include "btstack.h"
 #include "btstack_chipset_bcm.h"
 #include "btstack_config.h"
@@ -73,6 +74,12 @@ static gattAction_t gattAction;
 static bool have_custom_addr;
 static bd_addr_t public_bd_addr;
 
+
+static wiced_thread_t hal_btstack_thread_;
+static uint8_t hal_btstack_thread_quit=1;
+
+static void hal_stack_thread(uint32_t arg);
+
 /**@brief Gatt read/write callback handler. */
 static uint16_t (*gattReadCallback)(uint16_t handle, uint8_t * buffer, uint16_t buffer_size);
 static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size);
@@ -84,6 +91,16 @@ static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
 /**
  * Function Declare
  */
+/**
+ * @brief Thread for BLE loop.
+ */
+void hal_stack_thread(uint32_t arg) {
+	while(!hal_btstack_thread_quit)
+	{
+		hal_btstack_loop_execute();
+	}
+	WICED_END_OF_CURRENT_THREAD( );
+}
 
 /**
  * @brief Hardware error handler.
@@ -335,6 +352,8 @@ void hal_btstack_init(void)
         while (btstack_state != HCI_STATE_WORKING){
             btstack_run_loop_execute();
         }
+        hal_btstack_thread_quit = 0;
+        wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
         hci_init_flag = 1;
     }
 }
@@ -346,6 +365,7 @@ void hal_btstack_deInit(void)
         have_custom_addr = false;
         hci_close();
         btstack_run_loop_deInit();
+        hal_btstack_thread_quit = 1;
     }
     hci_init_flag = 0;
 }
