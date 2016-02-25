@@ -88,6 +88,11 @@ static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement)
 static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
 static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
 
+static uint8_t notify_queueFreeSize(void);
+static uint8_t notify_queneUsedSize(void);
+static uint8_t notify_queneWrite(hal_notifyData_t *dat);
+static uint8_t notify_queneRead(hal_notifyData_t *dat);
+
 /**
  * Function Declare
  */
