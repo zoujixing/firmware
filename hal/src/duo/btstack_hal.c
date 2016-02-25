@@ -43,16 +43,16 @@ enum {
 
 /**@brief notify/indicate data node */
 typedef struct{
-	uint16_t handle;
-	uint8_t  data_flag_len; //7-bit:1 indicate,0 notify. 6~0-bit:length of data.
-	uint8_t  data[20];
+    uint16_t handle;
+    uint8_t  data_flag_len; //7-bit:1 indicate,0 notify. 6~0-bit:length of data.
+    uint8_t  data[20];
 }hal_notifyData_t;
 
 /**@brief Queue for notify/indicate */
 typedef struct{
-	hal_notifyData_t queue[MAX_NO_NOTIFY_DATA_QUEUE];
-	uint8_t head;
-	uint8_t tail;
+    hal_notifyData_t queue[MAX_NO_NOTIFY_DATA_QUEUE];
+    uint8_t head;
+    uint8_t tail;
 }hal_notifyDataQueue_t;
 
 static hal_notifyDataQueue_t notify_queue={.head=0,.tail=0};
@@ -100,11 +100,11 @@ static uint8_t notify_queneRead(hal_notifyData_t *dat);
  * @brief Thread for BLE loop.
  */
 void hal_stack_thread(uint32_t arg) {
-	while(!hal_btstack_thread_quit)
-	{
-		hal_btstack_loop_execute();
-	}
-	WICED_END_OF_CURRENT_THREAD( );
+    while(!hal_btstack_thread_quit)
+    {
+        hal_btstack_loop_execute();
+    }
+    WICED_END_OF_CURRENT_THREAD( );
 }
 
 /**
@@ -380,21 +380,19 @@ void hal_btstack_deInit(void)
  */
 void hal_btstack_loop_execute(void)
 {
-	if(hci_init_flag)
-	{
-		if(notify_queneUsedSize() && att_server_can_send_packet_now())
-		{
-			hal_notifyData_t data;
-			notify_queneRead(&data);
-			if((data.data_flag_len & 0x80) == 0x00)
-			{
-				att_server_notify(data.handle, data.data, data.data_flag_len&0x7F);
-			}
-			else
-				att_server_indicate(data.handle, data.data, data.data_flag_len&0x7F);
-		}
-		btstack_run_loop_execute();
-	}
+    if(hci_init_flag)
+    {
+        if(notify_queneUsedSize() && att_server_can_send_packet_now())
+        {
+            hal_notifyData_t data;
+            notify_queneRead(&data);
+            if((data.data_flag_len & 0x80) == 0x00)
+                att_server_notify(data.handle, data.data, data.data_flag_len&0x7F);
+            else
+                att_server_indicate(data.handle, data.data, data.data_flag_len&0x7F);
+        }
+        btstack_run_loop_execute();
+    }
 }
 
 
@@ -593,9 +591,10 @@ void hal_btstack_disconnect(uint16_t handle)
  */
 int hal_btstack_attServerCanSend(void)
 {
-	if(!notify_queueFreeSize())
-		return 0;
-	return 1;
+    if(!notify_queueFreeSize())
+        return 0;
+        
+    return 1;
 }
 
 /**
@@ -611,14 +610,14 @@ int hal_btstack_attServerCanSend(void)
  */
 int hal_btstack_attServerSendNotify(uint16_t value_handle, uint8_t *value, uint16_t length)
 {
-	hal_notifyData_t data;
-	log_info("send notify \r\n");
-	data.handle        = value_handle;
-	data.data_flag_len = length;
-	memset(data.data, 0x00, 20);
-	memcpy(data.data, value,  length);
+    hal_notifyData_t data;
+    log_info("send notify \r\n");
+    data.handle        = value_handle;
+    data.data_flag_len = length;
+    memset(data.data, 0x00, 20);
+    memcpy(data.data, value,  length);
 
-	return notify_queneWrite(&data);
+    return notify_queneWrite(&data);
 }
 
 /**
@@ -632,14 +631,14 @@ int hal_btstack_attServerSendNotify(uint16_t value_handle, uint8_t *value, uint1
  */
 int hal_btstack_attServerSendIndicate(uint16_t value_handle, uint8_t *value, uint16_t length)
 {
-	hal_notifyData_t data;
+    hal_notifyData_t data;
 
-	data.handle        = value_handle;
-	data.data_flag_len = length | 0x80;
-	memset(data.data, 0x00, 20);
-	memcpy(data.data, value,  length);
+    data.handle        = value_handle;
+    data.data_flag_len = length | 0x80;
+    memset(data.data, 0x00, 20);
+    memcpy(data.data, value,  length);
 
-	return notify_queneWrite(&data);
+    return notify_queneWrite(&data);
 }
 
 /**
@@ -757,7 +756,7 @@ void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *a
  */
 static uint8_t notify_queueFreeSize(void)
 {
-	return ( MAX_NO_NOTIFY_DATA_QUEUE - 1 - ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE));
+    return ( MAX_NO_NOTIFY_DATA_QUEUE - 1 - ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE));
 }
 
 /**
@@ -768,7 +767,7 @@ static uint8_t notify_queueFreeSize(void)
  */
 static uint8_t notify_queneUsedSize(void)
 {
-	return ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE);
+    return ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE);
 }
 
 /**
@@ -779,13 +778,13 @@ static uint8_t notify_queneUsedSize(void)
  */
 static uint8_t notify_queneWrite(hal_notifyData_t *dat)
 {
-	if(!notify_queueFreeSize())
-		return 0;
+    if(!notify_queueFreeSize())
+        return 0;
 
-	notify_queue.queue[notify_queue.head] = *dat;
-	notify_queue.head = (notify_queue.head + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    notify_queue.queue[notify_queue.head] = *dat;
+    notify_queue.head = (notify_queue.head + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
 
-	return 1;
+    return 1;
 }
 
 /**
@@ -796,11 +795,11 @@ static uint8_t notify_queneWrite(hal_notifyData_t *dat)
  */
 static uint8_t notify_queneRead(hal_notifyData_t *dat)
 {
-	if(!notify_queneUsedSize())
-		return 0;
+    if(!notify_queneUsedSize())
+        return 0;
 
-	*dat = notify_queue.queue[notify_queue.tail];
-	notify_queue.tail = (notify_queue.tail + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    *dat = notify_queue.queue[notify_queue.tail];
+    notify_queue.tail = (notify_queue.tail + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
 
-	return 1;
+    return 1;
 }
