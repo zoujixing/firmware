@@ -197,21 +197,21 @@ void ble_provision_init(void)
         hal_btstack_setGattCharsWrite(gattWriteCallback);
 
         hal_btstack_addServiceUUID16bits(0x1800);
-        hal_btstack_addCharsUUID16bits(0x2A00, PROPERTY_READ|PROPERTY_WRITE, ble_device_name, sizeof(ble_device_name));
-        hal_btstack_addCharsUUID16bits(0x2A01, PROPERTY_READ, appearance, sizeof(appearance));
-        hal_btstack_addCharsUUID16bits(0x2A04, PROPERTY_READ, conn_param, sizeof(conn_param));
+        hal_btstack_addCharsUUID16bits(0x2A00, ATT_PROPERTY_READ|ATT_PROPERTY_WRITE, ble_device_name, sizeof(ble_device_name));
+        hal_btstack_addCharsUUID16bits(0x2A01, ATT_PROPERTY_READ, appearance, sizeof(appearance));
+        hal_btstack_addCharsUUID16bits(0x2A04, ATT_PROPERTY_READ, conn_param, sizeof(conn_param));
         hal_btstack_addServiceUUID16bits(0x1801);
-        hal_btstack_addCharsUUID16bits(0x2A05, PROPERTY_INDICATE, change, sizeof(change));
+        hal_btstack_addCharsUUID16bits(0x2A05, ATT_PROPERTY_INDICATE, change, sizeof(change));
 
         hal_btstack_addServiceUUID128bits(BLE_PROVISION_SERVICE_UUID);
-        command_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_CMD_CHAR_UUID, PROPERTY_WRITE_WITHOUT_RESPONSE|PROPERTY_NOTIFY, command_value, command_value_len);
-        status_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_STA_CHAR_UUID, PROPERTY_NOTIFY, status_value, 1);
+        command_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_CMD_CHAR_UUID, ATT_PROPERTY_WRITE_WITHOUT_RESPONSE|ATT_PROPERTY_NOTIFY, command_value, command_value_len);
+        status_value_handle = hal_btstack_addCharsDynamicUUID128bits(BLE_PROVISION_STA_CHAR_UUID, ATT_PROPERTY_NOTIFY, status_value, 1);
 
         // setup advertisements params
         uint16_t adv_int_min = 0x0030;
         uint16_t adv_int_max = 0x0030;
         uint8_t adv_type = 0;
-        addr_t null_addr;
+        bd_addr_t null_addr;
         memset(null_addr, 1, 6);
         hal_btstack_setAdvParams(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
 
