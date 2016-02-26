@@ -48,6 +48,9 @@
 #include "btstack_run_loop.h"
 #include "wiced.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /**
  * @brief Provide btstack_run_loop_posix instance for use with btstack_run_loop_init
  */
@@ -61,7 +64,7 @@ void btstack_run_loop_wiced_execute_code_on_main_thread(wiced_result_t (*fn)(voi
 void run_message_handler_register( void (*handle)(void) );
 /* API_END */
 
-#if defined __cplusplus
+#ifdef __cplusplus
 }
 #endif
 

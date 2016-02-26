@@ -110,7 +110,7 @@ void hal_stack_thread(uint32_t arg) {
 /**
  * @brief Hardware error handler.
  */
-void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
+static void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
 {
     report->advEventType = data[2];
     report->peerAddrType = data[3];
@@ -402,24 +402,24 @@ void hal_btstack_loop_execute(void)
  * @param[in]  *ts
  * @param[in]  timeout_in_ms
  */
-void hal_btstack_setTimer(hal_timer_source_t *ts, uint32_t timeout_in_ms)
+void hal_btstack_setTimer(btstack_timer_source_t *ts, uint32_t timeout_in_ms)
 {
-    btstack_run_loop_set_timer((btstack_timer_source_t *)ts, timeout_in_ms);
+    btstack_run_loop_set_timer(ts, timeout_in_ms);
 }
 
-void hal_btstack_setTimerHandler(hal_timer_source_t *ts, void (*process)(void *_ts))
+void hal_btstack_setTimerHandler(btstack_timer_source_t *ts, void (*process)(btstack_timer_source_t *_ts))
 {
-    btstack_run_loop_set_timer_handler((btstack_timer_source_t *)ts, process);
+    btstack_run_loop_set_timer_handler(ts, process);
 }
 
-void hal_btstack_addTimer(hal_timer_source_t *timer)
+void hal_btstack_addTimer(btstack_timer_source_t *timer)
 {
-    btstack_run_loop_add_timer((btstack_timer_source_t *)timer);
+    btstack_run_loop_add_timer(timer);
 }
 
-int hal_btstack_removeTimer(hal_timer_source_t *timer)
+int hal_btstack_removeTimer(btstack_timer_source_t *timer)
 {
-    return btstack_run_loop_remove_timer((btstack_timer_source_t *)timer);
+    return btstack_run_loop_remove_timer(timer);
 }
 
 uint32_t hal_btstack_getTimeMs(void)
@@ -448,7 +448,7 @@ void hal_btstack_enablePacketLogger(void)
 ***************************************************************/
 
 
-void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, addr_t addr)
+void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, bd_addr_t addr)
 {
     hci_le_advertisement_address(addr_type, addr);
 }
@@ -458,9 +458,9 @@ void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, addr_t addr)
  *
  * @param[in]  random_address_type
  */
-void hal_btstack_setRandomAddressMode(uint8_t random_address_type)
+void hal_btstack_setRandomAddressMode(gap_random_address_type_t random_address_type)
 {
-    gap_random_address_set_mode((gap_random_address_type_t)random_address_type);
+    gap_random_address_set_mode(random_address_type);
 }
 
 /**
@@ -468,7 +468,7 @@ void hal_btstack_setRandomAddressMode(uint8_t random_address_type)
  *
  * @param[in]  addr
  */
-void hal_btstack_setRandomAddr(addr_t addr)
+void hal_btstack_setRandomAddr(bd_addr_t addr)
 {
     gap_random_address_set(addr);
 }
@@ -478,7 +478,7 @@ void hal_btstack_setRandomAddr(addr_t addr)
  *
  * @param[in]  public_bd_addr
  */
-void hal_btstack_setPublicBdAddr(addr_t addr)
+void hal_btstack_setPublicBdAddr(bd_addr_t addr)
 {
     have_custom_addr = true;
     memcpy(public_bd_addr, addr ,6);
@@ -522,7 +522,7 @@ void hal_btstack_setAdvData(uint16_t size, uint8_t *data)
  * @param[in]  filter_policy
  *
  */
-void hal_btstack_setAdvParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
+void hal_btstack_setAdvParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
 {
     gap_advertisements_set_params(adv_int_min,adv_int_max,adv_type,dir_addr_type,dir_addr,channel_map,filter_policy);
 }
@@ -581,6 +581,10 @@ void hal_btstack_disconnect(uint16_t handle)
     btstack_run_loop_add_timer(&disconnect_time);
 }
 
+uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
+{
+    return le_central_connect(addr, type);
+}
 /***************************************************************
  * Gatt server API
 ***************************************************************/
@@ -697,7 +701,7 @@ uint16_t hal_btstack_addCharsUUID16bits(uint16_t uuid, uint16_t flags, uint8_t *
 
 uint16_t hal_btstack_addCharsDynamicUUID16bits(uint16_t uuid, uint16_t flags, uint8_t *data, uint16_t data_len)
 {
-    return att_db_util_add_characteristic_uuid16(uuid, flags|PROPERTY_DYNAMIC, data, data_len);
+    return att_db_util_add_characteristic_uuid16(uuid, flags|ATT_PROPERTY_DYNAMIC, data, data_len);
 }
 
 
@@ -715,7 +719,7 @@ uint16_t hal_btstack_addCharsUUID128bits(uint8_t *uuid, uint16_t flags, uint8_t 
 
 uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, uint8_t *data, uint16_t data_len)
 {
-    return att_db_util_add_characteristic_uuid128(uuid, flags|PROPERTY_DYNAMIC, data, data_len);
+    return att_db_util_add_characteristic_uuid128(uuid, flags|ATT_PROPERTY_DYNAMIC, data, data_len);
 }
 
 /***************************************************************
