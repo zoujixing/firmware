@@ -34,75 +34,39 @@
  * contact@bluekitchen-gmbh.com
  *
  */
-#ifndef __SDP_H
-#define __SDP_H
 
-#include <stdint.h>
-#include "btstack_linked_list.h"
+/**
+ * interface to provide link key storage
+ */
 
-#include "btstack_config.h"
+#ifndef __BTSTACK_LINK_KEY_DB_H
+#define __BTSTACK_LINK_KEY_DB_H
+
+#include "bluetooth.h"
 
 #if defined __cplusplus
 extern "C" {
 #endif
-    
-typedef struct {
-    // linked list - assert: first field
-    btstack_linked_item_t   item;
-
-    uint32_t        service_record_handle;
-    uint8_t *       service_record;
-} service_record_item_t;
-
-int sdp_handle_service_search_request(uint8_t * packet, uint16_t remote_mtu);
-int sdp_handle_service_attribute_request(uint8_t * packet, uint16_t remote_mtu);
-int sdp_handle_service_search_attribute_request(uint8_t * packet, uint16_t remote_mtu);
 
 /* API_START */
 
-/** 
- * @brief Set up SDP.
- */
-void sdp_initialize(void);
+typedef struct {
 
-/**
- * @brief Register Service Record with database using ServiceRecordHandle stored in record
- * @pre AttributeIDs are in ascending order
- * @pre ServiceRecordHandle is first attribute and valid
- * @param record is not copied!
- * @result status
- */
-uint8_t sdp_register_service(const uint8_t * record);
+    // management
+    void (*open)(void);
+    void (*close)(void);
+    
+    // link key
+    int  (*get_link_key)(bd_addr_t bd_addr, link_key_t link_key, link_key_type_t * type);
+    void (*put_link_key)(bd_addr_t bd_addr, link_key_t link_key, link_key_type_t   type);
+    void (*delete_link_key)(bd_addr_t bd_addr);
 
-/** 
- * @brief Unregister service record internally.
- */
-void sdp_unregister_service(uint32_t service_record_handle);
+} btstack_link_key_db_t;
 
 /* API_END */
-
-// used by daemon
-
-/**
- * @brief Finds an unused valid service record handle
- * @result handle
- */
-uint32_t sdp_create_service_record_handle(void);
-
-/**
- * @brief gets record for handle
- * @result record
- */
-
-uint8_t * sdp_get_record_for_handle(uint32_t handle);
-
-/**
- * @brief gets service record handle from record
- * @resutl service record handle or 0
- */
-uint32_t sdp_get_service_record_handle(const uint8_t * record);
 
 #if defined __cplusplus
 }
 #endif
-#endif // __SDP_H
+
+#endif // __BTSTACK_LINK_KEY_DB_H
