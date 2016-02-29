@@ -106,7 +106,7 @@ void message_handle(void)
         send_packet_finish = 0;
         tx_worker_data_size = 0;
         //notify upper stack that it might be possible to send again
-        uint8_t event[] = { DAEMON_EVENT_HCI_PACKET_SENT, 0};
+        uint8_t event[] = { HCI_EVENT_TRANSPORT_PACKET_SENT, 0};
         packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
     }
     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
@@ -307,10 +307,6 @@ static void h4_register_packet_handler(void (*handler)(uint8_t packet_type, uint
 
 static int h4_can_send_packet_now(uint8_t packet_type){
     return tx_worker_data_size == 0;
-}
-
-static const char * h4_get_transport_name(void){
-    return "H4";
 }
 
 static void dummy_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){

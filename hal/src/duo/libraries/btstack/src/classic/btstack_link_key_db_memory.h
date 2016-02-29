@@ -36,89 +36,35 @@
  */
 
 /**
- * interface to provide link key and remote name storage
+ * interface to provide link key storage
  */
 
-#ifndef __REMOTE_DEVICE_DB_H
-#define __REMOTE_DEVICE_DB_H
+#ifndef __BTSTACK_LINK_KEY_DB_MEMORY_H
+#define __BTSTACK_LINK_KEY_DB_MEMORY_H
 
-#include "btstack_util.h"
-#include "gap.h"
+#include "btstack_link_key_db.h"
+#include "btstack_linked_list.h"
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-/* API_START */
+/*
+ * @brief
+ */
+const btstack_link_key_db_t * btstack_link_key_db_memory_instance(void);
 
 typedef struct {
-
-    // management
-    void (*open)(void);
-    void (*close)(void);
-    
-    // link key
-    int  (*get_link_key)(bd_addr_t bd_addr, link_key_t link_key, link_key_type_t * type);
-    void (*put_link_key)(bd_addr_t bd_addr, link_key_t link_key, link_key_type_t   type);
-    void (*delete_link_key)(bd_addr_t bd_addr);
-    
-    // remote name
-    int  (*get_name)(bd_addr_t bd_addr, device_name_t *device_name);
-    void (*put_name)(bd_addr_t bd_addr, device_name_t *device_name);
-    void (*delete_name)(bd_addr_t bd_addr);
-
-} remote_device_db_t;
-
-/*
- * @brief
- */
-extern       remote_device_db_t remote_device_db_iphone;
-
-/*
- * @brief
- */
-extern const remote_device_db_t remote_device_db_memory;
-
-/*
- * @brief
- */
-extern const remote_device_db_t remote_device_db_fs;
-
-const remote_device_db_t * remote_device_db_fs_instance(void);
-
-/* API_END */
-
-// MARK: non-persistent implementation
-#include "btstack_linked_list.h"
-#define MAX_NAME_LEN 32
-typedef struct {
-    // linked list - assert: first field
-    btstack_linked_item_t    item;
-    
+    btstack_linked_item_t item;
     bd_addr_t bd_addr;
-} db_mem_device_t;
-
-typedef struct {
-    db_mem_device_t device;
     link_key_t link_key;
     link_key_type_t link_key_type;
-} db_mem_device_link_key_t;
+} btstack_link_key_db_memory_t;
 
-typedef struct {
-    db_mem_device_t device;
-    char device_name[MAX_NAME_LEN];
-} db_mem_device_name_t;
-
-typedef struct {
-    // linked list - assert: first field
-    btstack_linked_item_t    item;
-    
-    char service_name[MAX_NAME_LEN];
-    uint8_t channel;
-} db_mem_service_t;
+/* API_END */
 
 #if defined __cplusplus
 }
 #endif
 
-#endif // __REMOTE_DEVICE_DB_H
+#endif // __BTSTACK_LINK_KEY_DB_MEMORY_H

@@ -63,6 +63,7 @@ static uint8_t hci_init_flag = 0;
 
 static uint16_t le_peripheral_todos = 0;
 
+static btstack_packet_callback_registration_t hci_event_callback_registration;
 /**@brief connect timeout. */
 static btstack_timer_source_t connection_timer;
 
@@ -117,7 +118,7 @@ static void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
     report->rssi         = data[10]-256;
     report->advDataLen   = data[11];
     memcpy(report->advData, &data[12], report->advDataLen);
-    bt_flip_addr(report->peerAddr, &data[4]);
+    bd_addr_copy(report->peerAddr, &data[4]);
 }
 
 /**
@@ -177,11 +178,10 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 
     bd_addr_t addr;
     uint16_t handle;
-
     switch (packet_type) {
 
-        case HCI_EVENT_PACKET:
-            switch (packet[0]) {
+        case HCI_EVENT_PACKET:{
+            switch (hci_event_packet_get_type(packet)) {
 
                 case BTSTACK_EVENT_STATE:
                     btstack_state = packet[2];
@@ -195,13 +195,13 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 
                 case HCI_EVENT_DISCONNECTION_COMPLETE:
                     if (bleDeviceDisconnectedCallback) {
-                        handle = READ_BT_16(packet, 3);
+                        handle = little_endian_read_16(packet, 3);
                         (*bleDeviceDisconnectedCallback)(handle);
                     }
                     le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
                     break;
 
-                case GAP_LE_ADVERTISING_REPORT:
+                case GAP_LE_EVENT_ADVERTISING_REPORT:
                     if(bleAdvertismentCallback) {
                         advertisementReport_t report;
                         paseAdvertisemetReport(&report, packet);
@@ -210,8 +210,8 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     break;
 
                 case HCI_EVENT_COMMAND_COMPLETE:
-                    if (COMMAND_COMPLETE_EVENT(packet, hci_read_bd_addr)) {
-                        bt_flip_addr(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
+                    if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_bd_addr)) {
+                        bd_addr_copy(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
                         log_info("Local Address: %s\n", bd_addr_to_str(addr));
                         break;
                     }
@@ -220,7 +220,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                 case HCI_EVENT_LE_META:
                     switch (packet[2]) {
                         case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
-                            handle = READ_BT_16(packet, 4);
+                            handle = little_endian_read_16(packet, 4);
                             log_info("Connection complete, handle 0x%04x\n", handle);
                             btstack_run_loop_remove_timer(&connection_timer);
                             if (!bleDeviceConnectedCallback)
@@ -236,67 +236,67 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     }
                     break;
             }
+        }
+        break;
+
     }
-    // if (client_packet_handler){
-    //     (*client_packet_handler)(packet_type, channel, packet, size);
-    // }
 }
 
 
 static void gatt_client_callback(uint8_t packet_type, uint8_t * packet, uint16_t size){
-
-    // if (hci) event is not 4-byte aligned, event->handle causes crash
-    // workaround: check event type, assuming GATT event types are contagious
-    if (packet[0] < GATT_QUERY_COMPLETE) return;
-    if (packet[0] > GATT_MTU) return;
-
-//    uint16_t  con_handle = READ_BT_16(packet, 2);
-//    uint8_t   status;
-//    uint8_t * value;
-//    uint16_t  value_handle;
-//    uint16_t  value_length;
-
-    switch(packet[0]){
-        case GATT_SERVICE_QUERY_RESULT:
-
-            break;
-        case GATT_CHARACTERISTIC_QUERY_RESULT:
-
-            break;
-        case GATT_QUERY_COMPLETE:
-            //status = READ_BT_16(packet, 4);
-            switch (gattAction){
-                case gattActionWrite:
-
-                    break;
-                case gattActionSubscribe:
-
-                    break;
-                case gattActionUnsubscribe:
-
-                    break;
-                case gattActionServiceQuery:
-
-                    break;
-                case gattActionCharacteristicQuery:
-
-                    break;
-                default:
-                    break;
-            };
-            break;
-        case GATT_NOTIFICATION:
-
-            break;
-        case GATT_INDICATION:
-
-            break;
-        case GATT_CHARACTERISTIC_VALUE_QUERY_RESULT:
-
-            break;
-        default:
-            break;
-    }
+//
+//    // if (hci) event is not 4-byte aligned, event->handle causes crash
+//    // workaround: check event type, assuming GATT event types are contagious
+//    if (packet[0] < GATT_QUERY_COMPLETE) return;
+//    if (packet[0] > GATT_MTU) return;
+//
+////    uint16_t  con_handle = READ_BT_16(packet, 2);
+////    uint8_t   status;
+////    uint8_t * value;
+////    uint16_t  value_handle;
+////    uint16_t  value_length;
+//
+//    switch(packet[0]){
+//        case GATT_SERVICE_QUERY_RESULT:
+//
+//            break;
+//        case GATT_CHARACTERISTIC_QUERY_RESULT:
+//
+//            break;
+//        case GATT_QUERY_COMPLETE:
+//            //status = READ_BT_16(packet, 4);
+//            switch (gattAction){
+//                case gattActionWrite:
+//
+//                    break;
+//                case gattActionSubscribe:
+//
+//                    break;
+//                case gattActionUnsubscribe:
+//
+//                    break;
+//                case gattActionServiceQuery:
+//
+//                    break;
+//                case gattActionCharacteristicQuery:
+//
+//                    break;
+//                default:
+//                    break;
+//            };
+//            break;
+//        case GATT_NOTIFICATION:
+//
+//            break;
+//        case GATT_INDICATION:
+//
+//            break;
+//        case GATT_CHARACTERISTIC_VALUE_QUERY_RESULT:
+//
+//            break;
+//        default:
+//            break;
+//    }
 }
 
 
@@ -323,9 +323,9 @@ void hal_btstack_init(void)
         btstack_run_loop_init(btstack_run_loop_wiced_get_instance());
 
         const hci_transport_t   * transport = hci_transport_h4_instance();
-        remote_device_db_t * remote_db = (remote_device_db_t *) &remote_device_db_memory;
-        hci_init(transport, (void*)&hci_uart_config, remote_db);
 
+        hci_init(transport, (void*)&hci_uart_config);
+        hci_set_link_key_db(btstack_link_key_db_memory_instance());
         hci_set_chipset(btstack_chipset_bcm_instance());
 
         if (have_custom_addr){
@@ -333,6 +333,10 @@ void hal_btstack_init(void)
         }
 
         hci_set_hardware_error_callback(&bluetooth_hardware_error);
+
+        // register for HCI events
+        hci_event_callback_registration.callback = &packet_handler;
+        hci_add_event_handler(&hci_event_callback_registration);
 
         l2cap_init();
 
@@ -344,19 +348,19 @@ void hal_btstack_init(void)
         att_server_init(att_db_util_get_address(),att_read_callback, att_write_callback);
         att_server_register_packet_handler(packet_handler);
 
-        gatt_client_init();
-        gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
+        //gatt_client_init();
+        //gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
 
         memset(&notify_queue, 0x00, sizeof(hal_notifyDataQueue_t));
 
         // turn on!
         btstack_state = 0;
         hci_power_control(HCI_POWER_ON);
-
         // poll until working
         while (btstack_state != HCI_STATE_WORKING){
             btstack_run_loop_execute();
         }
+
         hal_btstack_thread_quit = 0;
         wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
         hci_init_flag = 1;
@@ -450,7 +454,7 @@ void hal_btstack_enablePacketLogger(void)
 
 void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, bd_addr_t addr)
 {
-    hci_le_advertisement_address(addr_type, addr);
+    //hci_le_advertisement_address(addr_type, addr);
 }
 
 /**
@@ -583,7 +587,7 @@ void hal_btstack_disconnect(uint16_t handle)
 
 uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
 {
-    return le_central_connect(addr, type);
+    return gap_connect(addr, type);
 }
 /***************************************************************
  * Gatt server API
@@ -615,7 +619,7 @@ int hal_btstack_attServerCanSend(void)
 int hal_btstack_attServerSendNotify(uint16_t value_handle, uint8_t *value, uint16_t length)
 {
     hal_notifyData_t data;
-    log_info("send notify \r\n");
+    log_info("send notify!");
     data.handle        = value_handle;
     data.data_flag_len = length;
     memset(data.data, 0x00, 20);
@@ -730,7 +734,7 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
  */
 void hal_btstack_startScanning(void)
 {
-    le_central_start_scan();
+    gap_start_scan();
 }
 
 /**
@@ -738,7 +742,7 @@ void hal_btstack_startScanning(void)
  */
 void hal_btstack_stopScanning(void)
 {
-    le_central_stop_scan();
+    gap_stop_scan();
 }
 
 /**
@@ -756,7 +760,7 @@ void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *a
  * @brief check whether has available space.
  *
  * @return 0    : full
- * 	       else : number of free.
+ *            else : number of free.
  */
 static uint8_t notify_queueFreeSize(void)
 {

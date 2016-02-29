@@ -73,7 +73,7 @@ static void chipset_set_baudrate_command(uint32_t baudrate, uint8_t *hci_cmd_buf
     hci_cmd_buffer[2] = 0x06;
     hci_cmd_buffer[3] = 0x00;
     hci_cmd_buffer[4] = 0x00;
-    bt_store_32(hci_cmd_buffer, 5, baudrate);
+    little_endian_store_32(hci_cmd_buffer, 5, baudrate);
 }
 
 // @note: bd addr has to be set after sending init script (it might just get re-set)
@@ -81,7 +81,7 @@ static void chipset_set_bd_addr_command(bd_addr_t addr, uint8_t *hci_cmd_buffer)
     hci_cmd_buffer[0] = 0x01;
     hci_cmd_buffer[1] = 0xfc;
     hci_cmd_buffer[2] = 0x06;
-    bt_flip_addr(&hci_cmd_buffer[3], addr);
+    bd_addr_copy(&hci_cmd_buffer[3], addr);
 }
 
 static btstack_chipset_result_t chipset_next_command(uint8_t * hci_cmd_buffer){
