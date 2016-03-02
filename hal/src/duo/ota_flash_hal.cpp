@@ -38,10 +38,14 @@ const module_bounds_t module_factory = { 0x40000, 0x140000, 0x180000, MODULE_FUN
 const module_bounds_t* module_bounds[] = { &module_bootloader, &module_system_part1, &module_system_part2, &module_user, &module_factory };
 
 const module_bounds_t module_ota = { 0x80000, 0xC0000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
-const module_bounds_t module_ota_section1 = { 0x60000, 0xE0000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
-const module_bounds_t module_ota_section2 = { 0x40000, 0x100000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
-const module_bounds_t module_ota_section3 = { 0x20000, 0x120000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
-const module_bounds_t* module_ota_bounds[] = { &module_ota_section1, &module_ota_section2, &module_ota_section3};
+const module_bounds_t module_ota_section1 = { 0x70000, 0xD0000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section2 = { 0x60000, 0xE0000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section3 = { 0x50000, 0xF0000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section4 = { 0x40000, 0x100000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section5 = { 0x30000, 0x110000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section6 = { 0x20000, 0x120000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t module_ota_section7 = { 0x10000, 0x130000, 0x140000, MODULE_FUNCTION_NONE, 0, MODULE_STORE_SCRATCHPAD};
+const module_bounds_t* module_ota_bounds[] = { &module_ota_section1, &module_ota_section2, &module_ota_section3, &module_ota_section4, &module_ota_section5, &module_ota_section6, &module_ota_section7};
 #else
 const module_bounds_t module_bootloader = { 0x4000, 0x8000000, 0x8004000, MODULE_FUNCTION_BOOTLOADER, 0, MODULE_STORE_MAIN};
 const module_bounds_t module_user = { 0x60000, 0x8020000, 0x8080000, MODULE_FUNCTION_MONO_FIRMWARE, 0, MODULE_STORE_MAIN};
