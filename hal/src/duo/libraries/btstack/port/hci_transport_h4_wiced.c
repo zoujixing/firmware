@@ -80,6 +80,7 @@ typedef enum {
 
 // single instance
 static hci_transport_h4_t * hci_transport_h4 = NULL;
+static hci_transport_config_uart_t * hci_transport_config_uart = NULL;
 
 static void (*packet_handler)(uint8_t packet_type, uint8_t *packet, uint16_t size) = dummy_handler;
 
@@ -93,7 +94,7 @@ HCI_USART_Ring_Buffer   ring_tx_buffer;
 HCI_USART_Ring_Buffer   ring_rx_buffer;
 
 static pkt_status_t     pkt_status = PKT_TYPE;
-static uint8_t          packet_offset;
+static uint16_t         packet_offset;
 static uint16_t         packet_payload_len;
 static uint32_t         timeout;
 static uint8_t          send_packet_finish;
@@ -109,7 +110,7 @@ void message_handle(void)
         uint8_t event[] = { HCI_EVENT_TRANSPORT_PACKET_SENT, 0};
         packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
     }
-    while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
+    if(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
     {
         if(pkt_status == PKT_TYPE){
             packet_offset = 0;
@@ -123,6 +124,7 @@ void message_handle(void)
                     pkt_status = PKT_HEAD_EVENT;
                 else {
                     // Invalid packet type.
+                	log_info("error:Invalid packet type");
                     pkt_status = PKT_TYPE;
                     packet_offset = 0;
                 }
@@ -144,6 +146,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
+                	log_info("error:acl_packet timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -165,6 +168,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
+                	log_info("error:event_packet timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -185,6 +189,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
+                	log_info("error:payload timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -195,7 +200,7 @@ void message_handle(void)
             // When handle packet, set RTS HIGH.
             HAL_GPIO_Write(BT_RTS, 1);
             //log_info("PACEKT: 0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x ", hci_packet[0],hci_packet[1],hci_packet[2],hci_packet[3],hci_packet[4],hci_packet[5]);
-
+            //log_info("packet handler");
             packet_handler(hci_packet[0], &hci_packet[1], (packet_offset-1));
 
             //log_info("packet handler over");
@@ -229,10 +234,19 @@ static int h4_set_baudrate(uint32_t baudrate){
 
 static void h4_init(const void *transport_config)
 {
-
+// check for hci_transport_config_uart_t
+    if (!transport_config) {
+        log_error("hci_transport_h4_posix: no config!");
+        return;
+    }
+    if (((hci_transport_config_t*)transport_config)->type != HCI_TRANSPORT_CONFIG_UART) {
+        log_error("hci_transport_h4_posix: config not of type != HCI_TRANSPORT_CONFIG_UART!");
+        return;
+    }
+    hci_transport_config_uart = (hci_transport_config_uart_t*) transport_config;
 }
 
-static int h4_open(){
+static int h4_open(void){
 	HAL_HCI_USART_Init(HAL_HCI_USART_SERIAL6, &ring_rx_buffer, &ring_tx_buffer);
 	// configure HOST and DEVICE WAKE PINs
 	HAL_Pin_Mode(BT_HOST_WK, INPUT_PULLUP);
@@ -273,7 +287,7 @@ static int h4_open(){
 	return 0;
 }
 
-static int h4_close(){
+static int h4_close(void){
     // not implementd
     return 0;
 }
@@ -316,14 +330,16 @@ static void dummy_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){
 const hci_transport_t * hci_transport_h4_instance() {
     if (hci_transport_h4 == NULL) {
         hci_transport_h4 = (hci_transport_h4_t*)malloc( sizeof(hci_transport_h4_t));
+        memset(hci_transport_h4, 0, sizeof(hci_transport_h4_t));
         hci_transport_h4->ds                                      = NULL;
+        hci_transport_h4->transport.name                          = "H4_WICED";
         hci_transport_h4->transport.init                          = h4_init;
         hci_transport_h4->transport.open                          = h4_open;
         hci_transport_h4->transport.close                         = h4_close;
-        hci_transport_h4->transport.send_packet                   = h4_send_packet;
         hci_transport_h4->transport.register_packet_handler       = h4_register_packet_handler;
-        hci_transport_h4->transport.set_baudrate                  = h4_set_baudrate;
         hci_transport_h4->transport.can_send_packet_now           = h4_can_send_packet_now;
+        hci_transport_h4->transport.send_packet                   = h4_send_packet;
+        hci_transport_h4->transport.set_baudrate                  = h4_set_baudrate;
     }
-    return (hci_transport_t *) hci_transport_h4;
+    return (const hci_transport_t *) hci_transport_h4;
 }

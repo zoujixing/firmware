@@ -68,7 +68,6 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connection_timer;
 
 /**@brief Gatt client. */
-static uint16_t gatt_client_id;
 static gattAction_t gattAction;
 
 /**@brief BD address. */
@@ -348,8 +347,7 @@ void hal_btstack_init(void)
         att_server_init(att_db_util_get_address(),att_read_callback, att_write_callback);
         att_server_register_packet_handler(packet_handler);
 
-        //gatt_client_init();
-        //gatt_client_id = gatt_client_register_packet_handler(gatt_client_callback);
+        gatt_client_init();
 
         memset(&notify_queue, 0x00, sizeof(hal_notifyDataQueue_t));
 
@@ -588,6 +586,11 @@ void hal_btstack_disconnect(uint16_t handle)
 uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
 {
     return gap_connect(addr, type);
+}
+
+void hal_btstack_setConnParamsRange(le_connection_parameter_range_t range)
+{
+	gap_set_connection_parameter_range(range);
 }
 /***************************************************************
  * Gatt server API

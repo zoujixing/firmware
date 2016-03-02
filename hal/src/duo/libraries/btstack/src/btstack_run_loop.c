@@ -168,3 +168,4 @@ void btstack_run_loop_deInit(void)
 {
 	the_run_loop = NULL;
 }
+
