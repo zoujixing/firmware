@@ -97,6 +97,8 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 void hal_btstack_startScanning(void);
 void hal_btstack_stopScanning(void);
 
+void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window);
+
 void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report));
 
 

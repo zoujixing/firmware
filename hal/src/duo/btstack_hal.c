@@ -110,14 +110,14 @@ void hal_stack_thread(uint32_t arg) {
 /**
  * @brief Hardware error handler.
  */
-static void paseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
+static void parseAdvertisemetReport(advertisementReport_t *report, uint8_t *data)
 {
     report->advEventType = data[2];
     report->peerAddrType = data[3];
     report->rssi         = data[10]-256;
     report->advDataLen   = data[11];
     memcpy(report->advData, &data[12], report->advDataLen);
-    bd_addr_copy(report->peerAddr, &data[4]);
+    reverse_bd_addr(&data[4],report->peerAddr);
 }
 
 /**
@@ -175,70 +175,70 @@ static int att_write_callback(uint16_t con_handle, uint16_t att_handle, uint16_t
  */
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
 
+	if (packet_type != HCI_EVENT_PACKET)
+        return;
     bd_addr_t addr;
     uint16_t handle;
-    switch (packet_type) {
+    uint8_t event = hci_event_packet_get_type(packet);
 
-        case HCI_EVENT_PACKET:{
-            switch (hci_event_packet_get_type(packet)) {
+	switch (event)
+	{
+		case BTSTACK_EVENT_STATE:
+			btstack_state = packet[2];
+			// bt stack activated, get started
+			if (packet[2] == HCI_STATE_WORKING) {
+				le_peripheral_todos |= SET_ADVERTISEMENT_PARAMS
+									| SET_ADVERTISEMENT_DATA
+									| SET_ADVERTISEMENT_ENABLED;
+			}
+			break;
 
-                case BTSTACK_EVENT_STATE:
-                    btstack_state = packet[2];
-                    // bt stack activated, get started
-                    if (packet[2] == HCI_STATE_WORKING) {
-                        le_peripheral_todos |= SET_ADVERTISEMENT_PARAMS
-                                            | SET_ADVERTISEMENT_DATA
-                                            | SET_ADVERTISEMENT_ENABLED;
-                    }
-                    break;
+		case HCI_EVENT_DISCONNECTION_COMPLETE:
+			if (bleDeviceDisconnectedCallback) {
+				handle = little_endian_read_16(packet, 3);
+				(*bleDeviceDisconnectedCallback)(handle);
+			}
+			le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
+			break;
 
-                case HCI_EVENT_DISCONNECTION_COMPLETE:
-                    if (bleDeviceDisconnectedCallback) {
-                        handle = little_endian_read_16(packet, 3);
-                        (*bleDeviceDisconnectedCallback)(handle);
-                    }
-                    le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
-                    break;
+		case GAP_LE_EVENT_ADVERTISING_REPORT:
+			if(bleAdvertismentCallback) {
+				advertisementReport_t report;
+				parseAdvertisemetReport(&report, packet);
+				(*bleAdvertismentCallback)(&report);
+			}
+			break;
 
-                case GAP_LE_EVENT_ADVERTISING_REPORT:
-                    if(bleAdvertismentCallback) {
-                        advertisementReport_t report;
-                        paseAdvertisemetReport(&report, packet);
-                        (*bleAdvertismentCallback)(&report);
-                    }
-                    break;
+		case HCI_EVENT_COMMAND_COMPLETE:
+			if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_bd_addr)) {
+				bd_addr_copy(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
+				log_info("Local Address: %s\n", bd_addr_to_str(addr));
+				break;
+			}
+			break;
 
-                case HCI_EVENT_COMMAND_COMPLETE:
-                    if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_bd_addr)) {
-                        bd_addr_copy(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
-                        log_info("Local Address: %s\n", bd_addr_to_str(addr));
-                        break;
-                    }
-                    break;
+		case HCI_EVENT_LE_META:
+			switch (packet[2])
+			{
+				case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
+					handle = little_endian_read_16(packet, 4);
+					log_info("Connection complete, handle 0x%04x\n", handle);
+					btstack_run_loop_remove_timer(&connection_timer);
+					if (!bleDeviceConnectedCallback)
+						break;
+					if (packet[3])
+						(*bleDeviceConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0x0000);
+					else
+						(*bleDeviceConnectedCallback)(BLE_STATUS_OK, handle);
+					break;
+				default:
+					break;
+			}
+			break;
 
-                case HCI_EVENT_LE_META:
-                    switch (packet[2]) {
-                        case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
-                            handle = little_endian_read_16(packet, 4);
-                            log_info("Connection complete, handle 0x%04x\n", handle);
-                            btstack_run_loop_remove_timer(&connection_timer);
-                            if (!bleDeviceConnectedCallback)
-                                break;
-                            if (packet[3]){
-                                (*bleDeviceConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0x0000);
-                            } else {
-                                (*bleDeviceConnectedCallback)(BLE_STATUS_OK, handle);
-                            }
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
-            }
-        }
-        break;
-
-    }
+		default:
+			break;
+	 }
 }
 
 
@@ -321,9 +321,7 @@ void hal_btstack_init(void)
         btstack_memory_init();
         btstack_run_loop_init(btstack_run_loop_wiced_get_instance());
 
-        const hci_transport_t   * transport = hci_transport_h4_instance();
-
-        hci_init(transport, (void*)&hci_uart_config);
+        hci_init(hci_transport_h4_instance(), (void*)&hci_uart_config);
         hci_set_link_key_db(btstack_link_key_db_memory_instance());
         hci_set_chipset(btstack_chipset_bcm_instance());
 
@@ -345,7 +343,7 @@ void hal_btstack_init(void)
         sm_init();
 
         att_server_init(att_db_util_get_address(),att_read_callback, att_write_callback);
-        att_server_register_packet_handler(packet_handler);
+        //att_server_register_packet_handler(packet_handler);
 
         gatt_client_init();
 
@@ -355,9 +353,9 @@ void hal_btstack_init(void)
         btstack_state = 0;
         hci_power_control(HCI_POWER_ON);
         // poll until working
-        while (btstack_state != HCI_STATE_WORKING){
-            btstack_run_loop_execute();
-        }
+        //while (btstack_state != HCI_STATE_WORKING){
+            //btstack_run_loop_execute();
+        //}
 
         hal_btstack_thread_quit = 0;
         wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
@@ -369,12 +367,12 @@ void hal_btstack_deInit(void)
 {
     if(hci_init_flag)
     {
+    	hci_init_flag = 0;
         have_custom_addr = false;
         hci_close();
         btstack_run_loop_deInit();
         hal_btstack_thread_quit = 1;
     }
-    hci_init_flag = 0;
 }
 
 /**
@@ -746,6 +744,11 @@ void hal_btstack_startScanning(void)
 void hal_btstack_stopScanning(void)
 {
     gap_stop_scan();
+}
+
+void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window)
+{
+	gap_set_scan_parameters(scan_type, scan_interval, scan_window);
 }
 
 /**
