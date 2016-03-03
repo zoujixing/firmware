@@ -14,14 +14,14 @@
 #include "wlan_hal.h"
 #include "usb_hal.h"
 
-typedef enum gattAction {
-    gattActionWrite,
-    gattActionSubscribe,
-    gattActionUnsubscribe,
-    gattActionServiceQuery,
-    gattActionCharacteristicQuery,
-    gattActionRead,
-} gattAction_t;
+typedef enum {
+    TC_IDLE,
+    TC_W4_SCAN_RESULT,
+    TC_W4_CONNECT,
+    TC_W4_SERVICE_RESULT,
+    TC_W4_CHARACTERISTIC_RESULT,
+    TC_W4_BATTERY_DATA
+} gc_state_t;
 
 /**
  * Local Variables
@@ -68,7 +68,7 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connection_timer;
 
 /**@brief Gatt client. */
-static gattAction_t gattAction;
+static gc_state_t state = TC_IDLE;
 
 /**@brief BD address. */
 static bool have_custom_addr;
@@ -241,61 +241,10 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 	 }
 }
 
+static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
 
-static void gatt_client_callback(uint8_t packet_type, uint8_t * packet, uint16_t size){
-//
-//    // if (hci) event is not 4-byte aligned, event->handle causes crash
-//    // workaround: check event type, assuming GATT event types are contagious
-//    if (packet[0] < GATT_QUERY_COMPLETE) return;
-//    if (packet[0] > GATT_MTU) return;
-//
-////    uint16_t  con_handle = READ_BT_16(packet, 2);
-////    uint8_t   status;
-////    uint8_t * value;
-////    uint16_t  value_handle;
-////    uint16_t  value_length;
-//
-//    switch(packet[0]){
-//        case GATT_SERVICE_QUERY_RESULT:
-//
-//            break;
-//        case GATT_CHARACTERISTIC_QUERY_RESULT:
-//
-//            break;
-//        case GATT_QUERY_COMPLETE:
-//            //status = READ_BT_16(packet, 4);
-//            switch (gattAction){
-//                case gattActionWrite:
-//
-//                    break;
-//                case gattActionSubscribe:
-//
-//                    break;
-//                case gattActionUnsubscribe:
-//
-//                    break;
-//                case gattActionServiceQuery:
-//
-//                    break;
-//                case gattActionCharacteristicQuery:
-//
-//                    break;
-//                default:
-//                    break;
-//            };
-//            break;
-//        case GATT_NOTIFICATION:
-//
-//            break;
-//        case GATT_INDICATION:
-//
-//            break;
-//        case GATT_CHARACTERISTIC_VALUE_QUERY_RESULT:
-//
-//            break;
-//        default:
-//            break;
-//    }
+
 }
 
 
@@ -447,12 +396,6 @@ void hal_btstack_enablePacketLogger(void)
  * Gap API
 ***************************************************************/
 
-
-void hal_btstack_getAdvertisementAddr(uint8_t *addr_type, bd_addr_t addr)
-{
-    //hci_le_advertisement_address(addr_type, addr);
-}
-
 /**
  * @brief Set mode of random address.
  *
@@ -560,7 +503,7 @@ void hal_btstack_setDisconnectedCallback(void (*callback)(uint16_t handle))
 }
 
 /**
- * @brief Disconnect by peripheral.
+ * @brief Disconnect.
  */
 static btstack_timer_source_t disconnect_time;
 static uint16_t disconnect_handle = 0xFFFF;
@@ -581,15 +524,54 @@ void hal_btstack_disconnect(uint16_t handle)
     btstack_run_loop_add_timer(&disconnect_time);
 }
 
+/**
+ * @brief Connect to remote device.
+ */
 uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
 {
     return gap_connect(addr, type);
 }
 
+/**
+ * @brief Parameters of connection.
+ */
 void hal_btstack_setConnParamsRange(le_connection_parameter_range_t range)
 {
 	gap_set_connection_parameter_range(range);
 }
+
+/**
+ * @brief Start scanning.
+ */
+void hal_btstack_startScanning(void)
+{
+    gap_start_scan();
+}
+
+/**
+ * @brief Stop scanning.
+ */
+void hal_btstack_stopScanning(void)
+{
+    gap_stop_scan();
+}
+
+/**
+ * @brief Parameters of scanning.
+ */
+void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window)
+{
+	gap_set_scan_parameters(scan_type, scan_interval, scan_window);
+}
+
+/**
+ * @brief Set advertisement report callback for scanning device.
+ */
+void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report))
+{
+    bleAdvertismentCallback = cb;
+}
+
 /***************************************************************
  * Gatt server API
 ***************************************************************/
@@ -709,7 +691,6 @@ uint16_t hal_btstack_addCharsDynamicUUID16bits(uint16_t uuid, uint16_t flags, ui
     return att_db_util_add_characteristic_uuid16(uuid, flags|ATT_PROPERTY_DYNAMIC, data, data_len);
 }
 
-
 /**
  * @brief Add a 128bits-UUID characteristic.
  *
@@ -730,34 +711,13 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 /***************************************************************
  * Gatt client API
 ***************************************************************/
-/**
- * @brief Start scanning.
- */
-void hal_btstack_startScanning(void)
+
+
+uint8_t hal_btstack_discoverPrimaryServices(uint16_t con_handle)
 {
-    gap_start_scan();
+    return gatt_client_discover_primary_services(handle_gatt_client_event, con_handle);
 }
 
-/**
- * @brief Stop scanning.
- */
-void hal_btstack_stopScanning(void)
-{
-    gap_stop_scan();
-}
-
-void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window)
-{
-	gap_set_scan_parameters(scan_type, scan_interval, scan_window);
-}
-
-/**
- * @brief Set advertisement report callback for scanning device.
- */
-void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report))
-{
-    bleAdvertismentCallback = cb;
-}
 
 /***************************************************************
  * Other API
