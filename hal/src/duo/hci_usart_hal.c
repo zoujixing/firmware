@@ -7,6 +7,9 @@
 #include "gpio_hal.h"
 #include "delay_hal.h"
 #include "stm32f2xx.h"
+#include "btstack.h"
+#include "hci_dump.h"
+#include "btstack_debug.h"
 
 #define TIMEOUT_COUNT    0x03FF
 
@@ -254,6 +257,10 @@ inline void store_char(unsigned char c, HCI_USART_Ring_Buffer *buffer)
         buffer->buffer[buffer->head] = c;
         buffer->head = i;
     }
+    else
+    {
+    	log_info("rx_buffer is full!!");
+    }
 }
 
 void HAL_HCI_USART_Init(HAL_HCI_USART_Serial serial, HCI_USART_Ring_Buffer *rx_buffer, HCI_USART_Ring_Buffer *tx_buffer)
@@ -382,6 +389,7 @@ int32_t HAL_HCI_USART_Write_Data(HAL_HCI_USART_Serial serial, uint8_t data)
     }
     else
     {
+    	log_info("tx_buffer is full!!");
         status = 0;
     }
 
