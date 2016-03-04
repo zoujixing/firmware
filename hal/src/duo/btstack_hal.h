@@ -99,8 +99,22 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 
 
 /**@brief Gatt client API */
+void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_service_t *service));
+void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_characteristic_t *characteristic));
+void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_characteristic_descriptor_t *characteristic));
 
 uint8_t hal_btstack_discoverPrimaryServices(uint16_t con_handle);
+uint8_t hal_btstack_discoverPrimaryServicesByUUID16(uint16_t con_handle, uint16_t uuid16);
+uint8_t hal_btstack_discoverPrimaryServicesByUUID128(uint16_t con_handle, const uint8_t *uuid);
+
+uint8_t hal_btstack_discoverCharsForService(uint16_t con_handle, gatt_client_service_t  *service);
+uint8_t hal_btstack_discoverCharsForHandleRangeByUUID16(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint16_t uuid16);
+uint8_t hal_btstack_discoverCharsForHandleRangeByUUID128(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint8_t *uuid);
+uint8_t hal_btstack_discoverCharsForServiceByUUID16(uint16_t con_handle, gatt_client_service_t *service, uint16_t uuid16);
+uint8_t hal_btstack_discoverCharsForServiceByUUID128(uint16_t con_handle, gatt_client_service_t *service, uint8_t *uuid128);
+
+uint8_t hal_btstack_discoverCharsDescriptors(uint16_t con_handle, gatt_client_characteristic_t *characteristic);
+
 
 #ifdef __cplusplus
 }
