@@ -466,6 +466,7 @@ static void ble_provision_parse_cmd(uint8_t *data, uint8_t data_len) {
                 config_ap_entry.security = (wiced_security_t)security;                               // Security
                 config_ap_entry.SSID_len = data[i++];                                                // SSID length
                 memcpy(config_ap_entry.SSID, &data[i], config_ap_entry.SSID_len);                    // SSID
+                config_ap_entry.SSID[config_ap_entry.SSID_len] = '\0';
                 i += config_ap_entry.SSID_len;
                 config_ap_entry.security_key_length = data[i++];                                     // Security key length
                 memcpy(config_ap_entry.security_key, &data[i], config_ap_entry.security_key_length); // Security key
