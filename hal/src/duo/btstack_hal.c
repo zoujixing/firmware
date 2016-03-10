@@ -15,12 +15,17 @@
 #include "usb_hal.h"
 
 typedef enum {
-    TC_IDLE,
-    TC_W4_SERVICE_RESULT,
-	TC_W4_INCLUDE_SERVICE_RESULT,
-    TC_W4_CHARACTERISTIC_RESULT,
-	TC_W4_CHARACTERISTIC_DESICIPTORS_RESULT,
-} gc_state_t;
+    GATT_CLIENT_IDLE,
+	GATT_CLIENT_SERVICE_RESULT,
+	GATT_CLIENT_INCLUDE_SERVICE_RESULT,
+	GATT_CLIENT_CHARACTERISTIC_RESULT,
+	GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT,
+	GATT_CLIENT_READ_VALUE_RESULT,
+	GATT_CLIENT_WRITE_VALUE_RESULT,
+	GATT_CLIENT_READ_DESCRIPTOR_RESULT,
+	GATT_CLIENT_WRITE_DESCRIPTOR_RESULT,
+	GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT,
+} gatt_client_operation_t;
 
 /**
  * Local Variables
@@ -66,17 +71,26 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 /**@brief connect timeout. */
 static btstack_timer_source_t connection_timer;
 
-/**@brief Gatt client. */
-static gc_state_t state = TC_IDLE;
+/**@brief Gatt client action. */
+static gatt_client_operation_t gatt_client_operation = GATT_CLIENT_IDLE;
+
+/**@brief Gatt client notification queue. */
+typedef struct{
+	gatt_client_notification_t client_notify;
+	uint8_t used_flag;
+}client_notification_t;
+
+static client_notification_t client_notify_queue[MAX_NO_CLIENT_NOTIFY_QUEUE];
 
 /**@brief BD address. */
 static bool have_custom_addr;
 static bd_addr_t public_bd_addr;
 
-
+/**@brief Thread for loop. */
 static wiced_thread_t hal_btstack_thread_;
 static uint8_t hal_btstack_thread_quit=1;
 
+/**@brief */
 static void hal_stack_thread(uint32_t arg);
 
 /**@brief Gatt read/write callback handler. */
@@ -86,14 +100,29 @@ static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffe
 static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement) = NULL;
 static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
 static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
-static void (*gattServiceDiscoveredCallback)(BLEStatus_t status, gatt_client_service_t *service) = NULL;
-static void (*gattCharsDiscoveredCallback)(BLEStatus_t status, gatt_client_characteristic_t *characteristic) = NULL;
-static void (*gattCharsDescriptorsDiscoveredCallback)(BLEStatus_t status, gatt_client_characteristic_descriptor_t *characteristic) = NULL;
+static void (*gattServiceDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_service_t *service) = NULL;
+static void (*gattCharsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_t *characteristic) = NULL;
+static void (*gattCharsDescriptorsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_descriptor_t *characteristic) = NULL;
+
+static void (*gattCharacteristicReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+static void (*gattCharacteristicWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+
+static void (*gattCharsDescriptorReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+static void (*gattCharsDescriptorticWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+
+static void (*gattWriteClientCharsConfigCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+static void (*gattNotifyUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+static void (*gattIndicateUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+
 
 static uint8_t notify_queueFreeSize(void);
 static uint8_t notify_queneUsedSize(void);
 static uint8_t notify_queneWrite(hal_notifyData_t *dat);
 static uint8_t notify_queneRead(hal_notifyData_t *dat);
+
+static void    client_notification_init(void);
+static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16_t con_handle, gatt_client_characteristic_t *characteristic);
+static void    client_notification_remove(uint16_t con_handle, gatt_client_characteristic_t *characteristic);
 
 /**
  * Function Declare
@@ -123,7 +152,7 @@ static void parseAdvertisemetReport(advertisementReport_t *report, uint8_t *data
 }
 
 /**
- * @brief extract  service from packet.
+ * @brief extract service from packet.
  */
 static void extract_service(gatt_client_service_t * service, uint8_t * packet){
     service->start_group_handle = little_endian_read_16(packet, 4);
@@ -223,7 +252,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     bd_addr_t addr;
     uint16_t handle;
     uint8_t event = hci_event_packet_get_type(packet);
-
+    //log_info("packet_handler type 0x%02x", event);
 	switch (event)
 	{
 		case BTSTACK_EVENT_STATE:
@@ -286,74 +315,158 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 
 static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
 {
-    switch(state)
-    {
-    	case TC_W4_SERVICE_RESULT:
-    		switch(packet[0])
-    		{
-    			case GATT_EVENT_SERVICE_QUERY_RESULT:
-    				if(gattServiceDiscoveredCallback)
-    				{
-    					gatt_client_service_t service;
-    					extract_service(&service, packet);
-    					gattServiceDiscoveredCallback(BLE_STATUS_OK, &service);
-    				}
-    				break;
+	// if (hci) event is not 4-byte aligned, event->handle causes crash
+	// workaround: check event type, assuming GATT event types are contagious
+	if (packet[0] < GATT_EVENT_QUERY_COMPLETE)
+		return;
+	if (packet[0] > GATT_EVENT_MTU)
+		return;
 
-    			case GATT_EVENT_QUERY_COMPLETE:
-    				state = TC_IDLE;
-    				if(gattServiceDiscoveredCallback)
-    				    gattServiceDiscoveredCallback(BLE_STATUS_DONE, NULL);
-    				break;
+	//log_info("The packet is : ");
+	//for(uint8_t index=0; index<size; index++)
+	//	log_info("0x%02x", packet[index]);
 
-    			default:
-    			break;
-    		}
-    		break;
+	uint16_t con_handle = little_endian_read_16(packet, 2);
+	uint8_t  status;
+	uint8_t  *value;
+	uint16_t value_handle;
+	uint16_t value_length;
 
-    	case TC_W4_CHARACTERISTIC_RESULT:
-    		switch(packet[0])
-    		{
-    			case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
+	log_info("gatt_client_event type 0x%02x", hci_event_packet_get_type(packet));
+
+	switch(hci_event_packet_get_type(packet))
+	{   // Scan primary services.
+		case GATT_EVENT_SERVICE_QUERY_RESULT:
+			if(gattServiceDiscoveredCallback)
+			{
+				gatt_client_service_t service;
+				extract_service(&service, packet);
+				gattServiceDiscoveredCallback(BLE_STATUS_OK, con_handle, &service);
+			}
+			break;
+		// Scan characteristics of services.
+		case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
+			if(gattCharsDiscoveredCallback)
+			{
+				gatt_client_characteristic_t characteristic;
+				extract_characteristic(&characteristic,packet);
+				gattCharsDiscoveredCallback(BLE_STATUS_OK, con_handle, &characteristic);
+			}
+			break;
+		// Scan descriptors of characteristic.
+		case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
+			if(gattCharsDescriptorsDiscoveredCallback)
+			{
+				gatt_client_characteristic_descriptor_t chars_descriptor;
+				extract_characteristic_descriptors(&chars_descriptor, packet);
+				gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_OK, con_handle, &chars_descriptor);
+			}
+			break;
+		// Read characteristic value.
+		case GATT_EVENT_CHARACTERISTIC_VALUE_QUERY_RESULT:
+			if(gattCharacteristicReadCallback)
+			{
+				value_handle = little_endian_read_16(packet, 4);
+				value_length = little_endian_read_16(packet, 6);
+				value = &packet[8];
+				gattCharacteristicReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+			}
+			break;
+        // Read long characteristic value.
+		case GATT_EVENT_LONG_CHARACTERISTIC_VALUE_QUERY_RESULT:
+			break;
+		// Read characteristic descriptors.
+		case GATT_EVENT_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
+			if(gattCharsDescriptorReadCallback)
+			{
+				value_handle = little_endian_read_16(packet, 4);
+				value_length = little_endian_read_16(packet, 6);
+				value = &packet[8];
+				gattCharsDescriptorReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+			}
+			break;
+		// Read long characteristic descriptors.
+		case GATT_EVENT_LONG_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
+			break;
+		// Notify update event.
+		case GATT_EVENT_NOTIFICATION:
+			if(gattNotifyUpdateCallback)
+			{
+				value_handle = little_endian_read_16(packet, 4);
+				value_length = little_endian_read_16(packet, 6);
+				value = &packet[8];
+				gattNotifyUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+			}
+			break;
+		// Indicate update event.
+		case GATT_EVENT_INDICATION:
+			if(gattIndicateUpdateCallback)
+			{
+				value_handle = little_endian_read_16(packet, 4);
+				value_length = little_endian_read_16(packet, 6);
+				value = &packet[8];
+				gattIndicateUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+			}
+			break;
+		// Event complete.
+		case GATT_EVENT_QUERY_COMPLETE:
+			status = little_endian_read_16(packet, 4);
+			switch(gatt_client_operation)
+			{
+				case GATT_CLIENT_SERVICE_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattServiceDiscoveredCallback)
+						gattServiceDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+					break;
+				case GATT_CLIENT_CHARACTERISTIC_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
     				if(gattCharsDiscoveredCallback)
-    				{
-    					gatt_client_characteristic_t characteristic;
-    					extract_characteristic(&characteristic,packet);
-    					gattCharsDiscoveredCallback(BLE_STATUS_OK,&characteristic);
-    				}
+    					gattCharsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
     				break;
+				case GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattCharsDescriptorsDiscoveredCallback)
+					    gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+					break;
+				case GATT_CLIENT_READ_VALUE_RESULT:
+					//packet:0xa0 0x03 con_handle status.
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattCharacteristicReadCallback)
+						gattCharacteristicReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
+					break;
+				case GATT_CLIENT_WRITE_VALUE_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattCharacteristicWrittenCallback)
+						gattCharacteristicWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+					break;
 
-    			case GATT_EVENT_QUERY_COMPLETE:
-    				state = TC_IDLE;
-    				if(gattCharsDiscoveredCallback)
-    					gattCharsDiscoveredCallback(BLE_STATUS_DONE, NULL);
-    				break;
-    		}
-    		break;
+				case GATT_CLIENT_READ_DESCRIPTOR_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattCharsDescriptorReadCallback)
+						gattCharsDescriptorReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
+					break;
 
-    	case TC_W4_CHARACTERISTIC_DESICIPTORS_RESULT:
-    		switch(packet[0])
-    		{
-    			case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
-    				if(gattCharsDescriptorsDiscoveredCallback)
-    				{
-    					gatt_client_characteristic_descriptor_t chars_descriptor;
-    					extract_characteristic_descriptors(&chars_descriptor, packet);
-    					gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_OK, &chars_descriptor);
-    				}
-    				break;
+				case GATT_CLIENT_WRITE_DESCRIPTOR_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattCharsDescriptorticWrittenCallback)
+						gattCharsDescriptorticWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+					break;
 
-    			case GATT_EVENT_QUERY_COMPLETE:
-    				state = TC_IDLE;
-    				if(gattCharsDescriptorsDiscoveredCallback)
-    					gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_DONE, NULL);
-    				break;
-    		}
-    		break;
+				case GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT:
+					gatt_client_operation = GATT_CLIENT_IDLE;
+					if(gattWriteClientCharsConfigCallback)
+						gattWriteClientCharsConfigCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+					break;
 
-    	default:
-    		break;
-    }
+				default:
+					break;
+			}
+
+			break;
+
+		default:
+			break;
+	}
 }
 
 
@@ -373,6 +486,13 @@ void hal_btstack_init(void)
         gattServiceDiscoveredCallback          = NULL;
         gattCharsDiscoveredCallback            = NULL;
         gattCharsDescriptorsDiscoveredCallback = NULL;
+        gattCharacteristicReadCallback         = NULL;
+        gattCharacteristicWrittenCallback      = NULL;
+        gattCharsDescriptorReadCallback        = NULL;
+        gattCharsDescriptorticWrittenCallback  = NULL;
+        gattWriteClientCharsConfigCallback     = NULL;
+        gattNotifyUpdateCallback               = NULL;
+        gattIndicateUpdateCallback             = NULL;
 
         att_db_util_init();
 
@@ -405,6 +525,7 @@ void hal_btstack_init(void)
 
         gatt_client_init();
 
+        client_notification_init();
         memset(&notify_queue, 0x00, sizeof(hal_notifyDataQueue_t));
 
         // turn on!
@@ -488,15 +609,15 @@ uint32_t hal_btstack_getTimeMs(void)
 /**
  * @brief Open debugger.
  */
-void hal_btstack_debugLogger(uint8_t flag)
+void hal_btstack_Log_info(uint8_t flag)
 {
     hci_dump_enable_log_level(LOG_LEVEL_INFO, flag);
 }
-void hal_btstack_debugError(uint8_t flag)
+void hal_btstack_error_info(uint8_t flag)
 {
     hci_dump_enable_log_level(LOG_LEVEL_ERROR, flag);
 }
-void hal_btstack_enablePacketLogger(void)
+void hal_btstack_enable_packet_info(void)
 {
     hci_dump_open(NULL, HCI_DUMP_STDOUT);
 }
@@ -539,7 +660,9 @@ void hal_btstack_setPublicBdAddr(bd_addr_t addr)
 /**
  * @brief Set local name.
  *
- * @param[in]  *local_name  Name string.
+ * @note has to be done before stack starts up
+ *
+ * @param[in]  *local_name  Name string,name is not copied, make sure memory is accessible during stack startup.
  */
 void hal_btstack_setLocalName(const char *local_name)
 {
@@ -548,8 +671,6 @@ void hal_btstack_setLocalName(const char *local_name)
 
 /**
  * @brief Set advertising data.
- *
- * @note
  *
  * @param[in]  size  The size of advertising data, no more than 31bytes.
  * @param[in]  data  Advertising data.
@@ -823,20 +944,81 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 /**
  * @brief Register callback for discovering service.
  */
-void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_service_t *service))
+void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_service_t *service))
 {
 	gattServiceDiscoveredCallback = cb;
 }
 
-void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_characteristic_t *characteristic))
+/**
+ * @brief Register callback for discovering characteristic.
+ */
+void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_t *characteristic))
 {
 	gattCharsDiscoveredCallback = cb;
 }
 
-void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_t status, gatt_client_characteristic_descriptor_t *characteristic))
+/**
+ * @brief Register callback for discovering descriptors of characteristic.
+ */
+void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_descriptor_t *characteristic))
 {
 	gattCharsDescriptorsDiscoveredCallback = cb;
 }
+
+/**
+ * @brief Register callback for reading characteristic value.
+ */
+void hal_btstack_setGattCharacteristicReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+{
+	gattCharacteristicReadCallback = cb;
+}
+
+/**
+ * @brief Register callback for writing characteristic value.
+ */
+void hal_btstack_setGattCharacteristicWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+{
+	gattCharacteristicWrittenCallback = cb;
+}
+
+/**
+ * @brief Register callback for reading characteristic descriptor value.
+ */
+void hal_btstack_setGattCharsDescriptorReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+{
+	gattCharsDescriptorReadCallback = cb;
+}
+
+/**
+ * @brief Register callback for writing characteristic descriptor value.
+ */
+void hal_btstack_setGattCharsDescriptorWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+{
+	gattCharsDescriptorticWrittenCallback = cb;
+}
+
+/**
+ * @brief Register callback for enable/disable CCCD.
+ */
+void hal_btstack_setGattWriteClientCharacteristicConfigCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+{
+	gattWriteClientCharsConfigCallback = cb;
+}
+
+/**
+ * @brief Register callback for value update.
+ */
+void hal_btstack_setGattNotifyUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+{
+	gattNotifyUpdateCallback = cb;
+}
+
+void hal_btstack_setGattIndicateUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+{
+	gattIndicateUpdateCallback = cb;
+}
+
+
 /**
  * @brief Discover primary service by conn_handle.
  *        For each found service, an le_service_event_t with type set to GATT_EVENT_SERVICE_QUERY_RESULT will be generated and passed to the registered callback.
@@ -850,57 +1032,289 @@ void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_
  */
 uint8_t hal_btstack_discoverPrimaryServices(uint16_t con_handle)
 {
-	state = TC_W4_SERVICE_RESULT;
+	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
     return gatt_client_discover_primary_services(handle_gatt_client_event, con_handle);
 }
 
 uint8_t hal_btstack_discoverPrimaryServicesByUUID16(uint16_t con_handle, uint16_t uuid16)
 {
-	state = TC_W4_SERVICE_RESULT;
+	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
 	return gatt_client_discover_primary_services_by_uuid16(handle_gatt_client_event, con_handle, uuid16);
 }
 
 uint8_t hal_btstack_discoverPrimaryServicesByUUID128(uint16_t con_handle, const uint8_t * uuid)
 {
-	state = TC_W4_SERVICE_RESULT;
+	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
 	return gatt_client_discover_primary_services_by_uuid128(handle_gatt_client_event, con_handle, uuid);
 }
 
+/**
+ * @brief Discover all characteristics of a service.
+ *        For each found characteristic, an le_characteristics_event_t with type set to GATT_EVENT_CHARACTERISTIC_QUERY_RESULT will be generated and passed to the registered callback.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of discovery.
+ *
+ * @param[in]  con_handle
+ * @param[in]  *service
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
 uint8_t hal_btstack_discoverCharsForService(uint16_t con_handle, gatt_client_service_t  *service)
 {
-	state = TC_W4_CHARACTERISTIC_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
 	return gatt_client_discover_characteristics_for_service(handle_gatt_client_event, con_handle, service);
 }
 
 uint8_t hal_btstack_discoverCharsForHandleRangeByUUID16(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint16_t uuid16)
 {
-	state = TC_W4_CHARACTERISTIC_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
 	return gatt_client_discover_characteristics_for_handle_range_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
 }
 
 uint8_t hal_btstack_discoverCharsForHandleRangeByUUID128(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint8_t  * uuid)
 {
-	state = TC_W4_CHARACTERISTIC_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
 	return gatt_client_discover_characteristics_for_handle_range_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid);
 }
 
 uint8_t hal_btstack_discoverCharsForServiceByUUID16(uint16_t con_handle, gatt_client_service_t  *service, uint16_t  uuid16)
 {
-	state = TC_W4_CHARACTERISTIC_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
 	return gatt_client_discover_characteristics_for_service_by_uuid16 (handle_gatt_client_event, con_handle, service, uuid16);
 }
 
 uint8_t hal_btstack_discoverCharsForServiceByUUID128(uint16_t con_handle, gatt_client_service_t  *service, uint8_t  * uuid128)
 {
-	state = TC_W4_CHARACTERISTIC_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
 	return gatt_client_discover_characteristics_for_service_by_uuid128(handle_gatt_client_event, con_handle, service, uuid128);
 }
 
+/**
+ * @brief Discover descriptors of a characteristic.
+ *        For each found descriptor, an le_characteristic_descriptor_event_t with type set to GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT will be generated and passed to the registered callback.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of discovery.
+ *
+ * @param[in]  con_handle
+ * @param[in]  *characteristic
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
 uint8_t hal_btstack_discoverCharsDescriptors(uint16_t con_handle, gatt_client_characteristic_t  *characteristic)
 {
-	state = TC_W4_CHARACTERISTIC_DESICIPTORS_RESULT;
+	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT;
 	return gatt_client_discover_characteristic_descriptors(handle_gatt_client_event, con_handle, characteristic);
 }
+
+/**
+ * @brief Reads the characteristic value using the characteristic's value handle.
+ *        If the characteristic value is found, an le_characteristic_value_event_t with type set to GATT_EVENT_CHARACTERISTIC_VALUE_QUERY_RESULT will be generated and passed to the registered callback.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of read.
+ *
+ * @param[in]  con_handle
+ * @param[in]  *characteristic
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
+uint8_t hal_btstack_readValueOfCharacteristic(uint16_t con_handle, gatt_client_characteristic_t  *characteristic)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
+}
+
+uint8_t hal_btstack_readValueOfCharacteristicUsingValueHandle(uint16_t con_handle, uint16_t characteristic_value_handle)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
+}
+
+uint8_t hal_btstack_readValueOfCharacteristicByUUID16(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint16_t uuid16)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_value_of_characteristics_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
+}
+
+uint8_t hal_btstack_readValueOfCharacteristicByUUID128(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint8_t *uuid128)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_value_of_characteristics_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid128);
+}
+
+uint8_t hal_btstack_readLongValueOfCharacteristic(uint16_t con_handle, gatt_client_characteristic_t *characteristic)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
+}
+
+uint8_t hal_btstack_readLongValueOfCharacteristicUsingValueHandle(uint16_t con_handle, uint16_t characteristic_value_handle)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_long_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
+}
+
+uint8_t hal_btstack_readLongValueOfCharacteristicUsingValueHandleWithOffset(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t offset)
+{
+	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+	return gatt_client_read_long_value_of_characteristic_using_value_handle_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset);
+}
+
+/**
+ * @brief Writes the characteristic value using the characteristic's value handle without an acknowledgment that the write was successfully performed.
+ */
+uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t  * data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+	return gatt_client_write_value_of_characteristic_without_response(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+}
+
+/**
+ * @brief Writes the characteristic value.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of write.
+ *        The write is successfully performed, if the event's status field is set to 0.
+ *
+ * @param[in]  con_handle
+ * @param[in]  characteristic_value_handle
+ * @param[in]  length
+ * @param[in]  *data
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
+uint8_t hal_btstack_writeValueOfCharacteristic(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+	return gatt_client_write_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+}
+
+uint8_t hal_btstack_writeLongValueOfCharacteristic(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+	return gatt_client_write_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+}
+
+uint8_t hal_btstack_writeLongValueOfCharacteristicWithOffset(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t offset, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+	return gatt_client_write_long_value_of_characteristic_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset, length, data);
+}
+
+/**
+ * @brief Reads the characteristic descriptor.
+ *        If the characteristic descriptor is found, an le_characteristic_descriptor_event_t with type set to GATT_EVENT_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT will be generated and passed to the registered callback.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of read.
+ *
+ * @param[in]  con_handle
+ * @param[in]  *descriptor
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
+uint8_t hal_btstack_readCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor)
+{
+	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+	return gatt_client_read_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
+}
+
+uint8_t hal_btstack_readCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle)
+{
+	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+	return gatt_client_read_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
+}
+
+uint8_t hal_btstack_readLongCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor)
+{
+	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+	return gatt_client_read_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
+}
+
+uint8_t hal_btstack_readLongCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle)
+{
+	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+	return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
+}
+
+uint8_t hal_btstack_readLongCharacteristicDescriptorUsingDescriptorHandleWithOffset(uint16_t con_handle, uint16_t descriptor_handle, uint16_t offset)
+{
+	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+	return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset);
+}
+
+/**
+ * @brief Write the characteristic descriptor.
+ *        The gatt_complete_event_t with type set to GATT_EVENT_QUERY_COMPLETE, marks the end of write. The write is successfully performed, if the event's status field is set to 0.
+ * @param[in]  con_handle
+ * @param[in]  *descriptor
+ * @param[in]
+ * @param[in]
+ *
+ * @return BTSTACK_MEMORY_ALLOC_FAILED
+ *         GATT_CLIENT_IN_WRONG_STATE
+ *         0::SUCCESS
+ */
+uint8_t hal_btstack_writeCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+	return gatt_client_write_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
+}
+
+uint8_t hal_btstack_writeCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+	return gatt_client_write_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
+}
+
+uint8_t hal_btstack_writeLongCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+	return gatt_client_write_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
+}
+
+uint8_t hal_btstack_writeLongCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+	return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
+}
+
+uint8_t hal_btstack_writeLongCharacteristicDescriptorUsingDescriptorHandleWithOffset(uint16_t con_handle, uint16_t descriptor_handle, uint16_t offset, uint16_t length, uint8_t *data)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+	return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset, length, data);
+}
+
+/**
+ * @brief Writes the client characteristic configuration of the specified characteristic. It is used to subscribe for notifications or indications of the characteristic value. For notifications or indications specify: GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NOTIFICATION resp. GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_INDICATION as configuration value.
+ */
+uint8_t hal_btstack_WriteClientCharacteristicConfiguration(uint16_t con_handle, gatt_client_characteristic_t * characteristic, uint16_t configuration)
+{
+	gatt_client_operation = GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT;
+	if(configuration == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NONE)
+	{
+		client_notification_remove(con_handle, characteristic);
+		return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
+	}
+	else
+	{
+		uint8_t ret = client_notification_add(handle_gatt_client_event, con_handle, characteristic);
+		if(ret == 0)
+			return BTSTACK_MEMORY_ALLOC_FAILED;
+		else if(ret == 1)
+			return 0;
+		else
+			return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
+	}
+}
+
+void hal_btstack_listenForCharacteristicValueUpdates(gatt_client_notification_t *notification, uint16_t con_handle, gatt_client_characteristic_t *characteristic)
+{
+	gatt_client_listen_for_characteristic_value_updates(notification, con_handle, characteristic);
+}
+
 
 /***************************************************************
  * Other API
@@ -909,7 +1323,7 @@ uint8_t hal_btstack_discoverCharsDescriptors(uint16_t con_handle, gatt_client_ch
  * @brief check whether has available space.
  *
  * @return 0    : full
- *            else : number of free.
+ *         else : number of free.
  */
 static uint8_t notify_queueFreeSize(void)
 {
@@ -960,3 +1374,74 @@ static uint8_t notify_queneRead(hal_notifyData_t *dat)
 
     return 1;
 }
+
+/**
+ * @brief Operations of client_notify_queue.
+ */
+static void client_notification_init(void)
+{
+	memset(client_notify_queue, 0x00, sizeof(client_notify_queue));
+}
+
+/**
+ * @brief Add element to list.
+ *
+ * @return 0:FAIL.
+ *         1:EXIST.
+ *         2:SUCCESS.
+ */
+static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16_t con_handle, gatt_client_characteristic_t *characteristic)
+{
+	uint8_t index = 0;
+
+	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
+		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle) {
+			// Exist
+			log_info("client notify exist.");
+			return 1;
+		}
+	}
+    // Get a available index.
+	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+		if(client_notify_queue[index].used_flag == 0)
+			break;
+	}
+	if(index >= MAX_NO_CLIENT_NOTIFY_QUEUE)
+		return 0;
+
+	client_notify_queue[index].client_notify.callback = callback;
+	client_notify_queue[index].used_flag = 1;
+	log_info("client notify listen.");
+	gatt_client_listen_for_characteristic_value_updates(&client_notify_queue[index].client_notify, con_handle, characteristic);
+
+	return 2;
+}
+
+/**
+ * @brief Remove element from list.
+ *
+ * @return 0:FAIL.
+ *         1:SUCCESS.
+ */
+static void client_notification_remove(uint16_t con_handle, gatt_client_characteristic_t *characteristic)
+{
+	uint8_t index = 0;
+
+	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
+		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle)
+		{
+			log_info("client notify clean.");
+			client_notify_queue[index].client_notify.con_handle = 0;
+			client_notify_queue[index].client_notify.attribute_handle = 0;
+			client_notify_queue[index].client_notify.callback = NULL;
+			client_notify_queue[index].used_flag = 0;
+		}
+	}
+}
+
+
+
+
+

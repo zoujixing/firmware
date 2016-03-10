@@ -189,6 +189,9 @@ void ble_provision_init(void)
         memcpy(&adv_data[23], name.value, MIN(name.length, 8));
         memcpy(ble_device_name, name.value, MIN(name.length, 20));
 
+        //hal_btstack_Log_info(true);
+        //hal_btstack_enable_packet_info();
+
         hal_btstack_init();
 
         hal_btstack_setConnectedCallback(deviceConnectedCallback);
@@ -218,9 +221,9 @@ void ble_provision_init(void)
         // set ble advertising.
         hal_btstack_setAdvData(sizeof(adv_data), (uint8_t *)adv_data);
 
-        hal_btstack_startAdvertising();
         INFO("BLE Provisioning begin.\n");
     }
+    hal_btstack_startAdvertising();
 }
 
 void ble_provision_finalize() {
@@ -533,7 +536,7 @@ static void deviceDisconnectedCallback(uint16_t handle) {
     status_notify_flag = 0x0000;
 
     /* Connection released. Re-enable BLE connectability. */
-    if(device_configured != WICED_TRUE)
+    //if(device_configured != WICED_TRUE)
         hal_btstack_startAdvertising();
 }
 
