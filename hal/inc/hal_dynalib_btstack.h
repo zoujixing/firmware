@@ -88,10 +88,10 @@ DYNALIB_FN(32, hal_btstack, hal_btstack_setGattCharsWrite, void(int(*)(uint16_t,
 
 DYNALIB_FN(33, hal_btstack, hal_btstack_addServiceUUID16bits, void(uint16_t))
 DYNALIB_FN(34, hal_btstack, hal_btstack_addServiceUUID128bits, void(uint8_t*))
-DYNALIB_FN(35, hal_btstack, hal_btstack_addCharsUUID16bits, uint16_t(uint16_t, uint16_t uint8_t*, uint16_t))
+DYNALIB_FN(35, hal_btstack, hal_btstack_addCharsUUID16bits, uint16_t(uint16_t, uint16_t, uint8_t*, uint16_t))
 DYNALIB_FN(36, hal_btstack, hal_btstack_addCharsUUID128bits, uint16_t(uint8_t*, uint16_t, uint8_t*, uint16_t))
-DYNALIB_FN(37, hal_btstack, hal_btstack_addCharsDynamicUUID16bits, uint16_t(uint16_t, uint16_t uint8_t*, uint16_t))
-DYNALIB_FN(38, hal_btstack, hal_btstack_addCharsDynamicUUID128bits, uint16_t(uint16_t, uint16_t uint8_t*, uint16_t))
+DYNALIB_FN(37, hal_btstack, hal_btstack_addCharsDynamicUUID16bits, uint16_t(uint16_t, uint16_t, uint8_t*, uint16_t))
+DYNALIB_FN(38, hal_btstack, hal_btstack_addCharsDynamicUUID128bits, uint16_t(uint8_t*, uint16_t, uint8_t*, uint16_t))
 
 
 DYNALIB_FN(39, hal_btstack, hal_btstack_setGattServiceDiscoveredCallback, void(void(*)(BLEStatus_t, uint16_t, gatt_client_service_t*)))
@@ -108,7 +108,7 @@ DYNALIB_FN(48, hal_btstack, hal_btstack_setGattIndicateUpdateCallback, void(void
 
 DYNALIB_FN(49, hal_btstack, hal_btstack_discoverPrimaryServices, uint8_t(uint16_t))
 DYNALIB_FN(50, hal_btstack, hal_btstack_discoverPrimaryServicesByUUID16, uint8_t(uint16_t, uint16_t))
-DYNALIB_FN(51, hal_btstack, hal_btstack_discoverPrimaryServicesByUUID128, uint8(uint16_t, uint8_t*))
+DYNALIB_FN(51, hal_btstack, hal_btstack_discoverPrimaryServicesByUUID128, uint8_t(uint16_t, const uint8_t*))
 
 DYNALIB_FN(52, hal_btstack, hal_btstack_discoverCharsForService, uint8_t(uint16_t, gatt_client_service_t*))
 DYNALIB_FN(53, hal_btstack, hal_btstack_discoverCharsForHandleRangeByUUID16, uint8_t(uint16_t, uint16_t, uint16_t, uint16_t))
