@@ -389,7 +389,7 @@ int32_t HAL_HCI_USART_Write_Data(HAL_HCI_USART_Serial serial, uint8_t data)
     }
     else
     {
-    	log_info("tx_buffer is full!!");
+    	log_error("tx_buffer is full!!");
         status = 0;
     }
 
@@ -455,6 +455,8 @@ static void HAL_HCI_USART_IRQHandler(HAL_HCI_USART_Serial serial)
         // Read byte from the receive data register
         unsigned char c = USART_ReceiveData(usartMap[serial]->usart_peripheral);
         store_char(c, usartMap[serial]->usart_rx_buffer);
+        if( ((HCI_USART_BUFFER_SIZE + usartMap[serial]->usart_rx_buffer->head - usartMap[serial]->usart_rx_buffer->tail) % HCI_USART_BUFFER_SIZE) > (HCI_USART_BUFFER_SIZE-5) )
+        	HAL_GPIO_Write(BT_RTS, 1);
     }
 
     if(USART_GetITStatus(usartMap[serial]->usart_peripheral, USART_IT_TXE) != RESET)

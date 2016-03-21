@@ -532,9 +532,9 @@ void hal_btstack_init(void)
         btstack_state = 0;
         hci_power_control(HCI_POWER_ON);
         // poll until working
-        //while (btstack_state != HCI_STATE_WORKING){
-            //btstack_run_loop_execute();
-        //}
+        while (btstack_state != HCI_STATE_WORKING){
+            btstack_run_loop_execute();
+        }
 
         hal_btstack_thread_quit = 0;
         wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);

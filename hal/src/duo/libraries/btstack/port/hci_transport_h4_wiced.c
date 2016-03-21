@@ -124,7 +124,7 @@ void message_handle(void)
                     pkt_status = PKT_HEAD_EVENT;
                 else {
                     // Invalid packet type.
-                	log_info("error:Invalid packet type");
+                	log_error("error:Invalid packet type");
                     pkt_status = PKT_TYPE;
                     packet_offset = 0;
                 }
@@ -146,7 +146,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
-                	log_info("error:acl_packet timeout");
+                	log_error("error:acl_packet timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -168,7 +168,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
-                	log_info("error:event_packet timeout");
+                	log_error("error:event_packet timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -189,7 +189,7 @@ void message_handle(void)
             else {
                 timeout++;
                 if(timeout >= PACKET_RECEIVE_TIMEOUT){
-                	log_info("error:payload timeout");
+                	log_error("error:payload timeout");
                     while(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6))
                         HAL_HCI_USART_Read_Data(HAL_HCI_USART_SERIAL6);
                     pkt_status=PKT_TYPE;
@@ -208,7 +208,8 @@ void message_handle(void)
             pkt_status = PKT_TYPE;
             packet_offset = 0;
             // After handle, set RTS LOW.
-            HAL_GPIO_Write(BT_RTS, 0);
+            if(HAL_HCI_USART_Available_Data(HAL_HCI_USART_SERIAL6) < (HCI_USART_BUFFER_SIZE-10))
+            	HAL_GPIO_Write(BT_RTS, 0);
         }
     }
     HAL_HCI_USART_RestartSend(HAL_HCI_USART_SERIAL6);
@@ -220,7 +221,9 @@ static int h4_set_baudrate(uint32_t baudrate){
     HAL_GPIO_Write(BT_RTS, 1);
     HAL_Delay_Milliseconds(5);
 
-    //HAL_HCI_USART_Set_BaudRate(HAL_HCI_USART_SERIAL6, baudrate);
+    //HAL_HCI_USART_End(HAL_HCI_USART_SERIAL6);
+    //HAL_Delay_Milliseconds(1);
+    //HAL_HCI_USART_Begin(HAL_HCI_USART_SERIAL6, baudrate);
     
     // Wait for CTS is LOW.
     HAL_GPIO_Write(BT_RTS, 0);
@@ -262,7 +265,7 @@ static int h4_open(void){
 	HAL_Pin_Mode(BT_CTS, INPUT_PULLUP);
 #endif
 
-	HAL_HCI_USART_Begin(HAL_HCI_USART_SERIAL6, 115200);
+	HAL_HCI_USART_Begin(HAL_HCI_USART_SERIAL6, HCI_INIT_BAUDRATE);
 	// reset Bluetooth
 	HAL_Pin_Mode(BT_POWER, OUTPUT);
 	HAL_GPIO_Write(BT_POWER, 0);
