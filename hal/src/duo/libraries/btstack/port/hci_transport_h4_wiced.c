@@ -235,9 +235,8 @@ static int h4_set_baudrate(uint32_t baudrate){
     return 0;
 }
 
-static void h4_init(const void *transport_config)
-{
-// check for hci_transport_config_uart_t
+static void h4_init(const void * transport_config){
+    // check for hci_transport_config_uart_t
     if (!transport_config) {
         log_error("hci_transport_h4_posix: no config!");
         return;
@@ -330,7 +329,7 @@ static void dummy_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){
 }
 
 // get h4 singleton
-const hci_transport_t * hci_transport_h4_instance() {
+const hci_transport_t * hci_transport_h4_instance(void) {
     if (hci_transport_h4 == NULL) {
         hci_transport_h4 = (hci_transport_h4_t*)malloc( sizeof(hci_transport_h4_t));
         memset(hci_transport_h4, 0, sizeof(hci_transport_h4_t));

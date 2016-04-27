@@ -82,7 +82,8 @@ static void l2cap_emit_channel_closed(l2cap_channel_t *channel);
 static void l2cap_emit_connection_request(l2cap_channel_t *channel);
 static int  l2cap_channel_ready_for_open(l2cap_channel_t *channel);
 static void l2cap_hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
-static void l2cap_acl_handler(uint8_t packet_type, uint8_t *packet, uint16_t size );
+static void l2cap_acl_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size );
+static void l2cap_notify_channel_can_send(void);
 
 typedef struct l2cap_fixed_channel {
     btstack_packet_handler_t callback;
@@ -185,14 +186,6 @@ void l2cap_emit_channel_opened(l2cap_channel_t *channel, uint8_t status) {
     little_endian_store_16(event, 21, channel->flush_timeout); 
     hci_dump_packet( HCI_EVENT_PACKET, 0, event, sizeof(event));
     l2cap_dispatch_to_channel(channel, HCI_EVENT_PACKET, event, sizeof(event));
-
-    // if channel opened successfully, also send can send now if possible
-    if (status) return;
-    if (hci_can_send_acl_packet_now(channel->con_handle)){
-        l2cap_emit_can_send_now(channel->packet_handler, channel->local_cid);
-    } else {
-        channel->waiting_for_can_send_now = 1;
-    }
 }
 
 void l2cap_emit_channel_closed(l2cap_channel_t *channel) {
@@ -253,36 +246,41 @@ static l2cap_channel_t * l2cap_get_channel_for_local_cid(uint16_t local_cid){
     return NULL;
 }
 
+///
+
+void l2cap_request_can_send_now_event(uint16_t local_cid){
+    l2cap_channel_t *channel = l2cap_get_channel_for_local_cid(local_cid);
+    if (!channel) return;
+    channel->waiting_for_can_send_now = 1;
+    l2cap_notify_channel_can_send();
+}
+
+void l2cap_request_can_send_fix_channel_now_event(hci_con_handle_t con_handle, uint16_t channel_id){
+    int index = l2cap_fixed_channel_table_index_for_channel_id(channel_id);
+    if (index < 0) return;
+    fixed_channels[index].waiting_for_can_send_now = 1;
+    l2cap_notify_channel_can_send();
+}
+
+///
+
 int  l2cap_can_send_packet_now(uint16_t local_cid){
     l2cap_channel_t *channel = l2cap_get_channel_for_local_cid(local_cid);
     if (!channel) return 0;
-    int can_send = hci_can_send_acl_packet_now(channel->con_handle);
-    if (!can_send){
-        channel->waiting_for_can_send_now = 1;
-    }
-    return can_send;
+    return hci_can_send_acl_packet_now(channel->con_handle);
 }
 
 int  l2cap_can_send_prepared_packet_now(uint16_t local_cid){
     l2cap_channel_t *channel = l2cap_get_channel_for_local_cid(local_cid);
     if (!channel) return 0;
-    int can_send = hci_can_send_prepared_acl_packet_now(channel->con_handle);
-    if (!can_send){
-        channel->waiting_for_can_send_now = 1;
-    }
-    return can_send;
+    return hci_can_send_prepared_acl_packet_now(channel->con_handle);
 }
 
 int  l2cap_can_send_fixed_channel_packet_now(hci_con_handle_t con_handle, uint16_t channel_id){
-    int can_send = hci_can_send_acl_packet_now(con_handle);
-    if (!can_send){
-        int index = l2cap_fixed_channel_table_index_for_channel_id(channel_id);
-        if (index >= 0){
-            fixed_channels[index].waiting_for_can_send_now = 1;
-        }
-    }
-    return can_send;
+    return hci_can_send_acl_packet_now(con_handle);
 }
+
+///
 
 uint16_t l2cap_get_remote_mtu_for_local_cid(uint16_t local_cid){
     l2cap_channel_t * channel = l2cap_get_channel_for_local_cid(local_cid);
@@ -1383,7 +1381,7 @@ static void l2cap_signaling_handler_dispatch( hci_con_handle_t handle, uint8_t *
     }
 }
 
-static void l2cap_acl_handler(uint8_t packet_type, uint8_t *packet, uint16_t size ){
+static void l2cap_acl_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size ){
         
     // Get Channel ID
     uint16_t channel_id = READ_L2CAP_CHANNEL_ID(packet); 
@@ -1446,7 +1444,7 @@ static void l2cap_acl_handler(uint8_t packet_type, uint8_t *packet, uint16_t siz
                         }
                         int update_parameter = 1;
                         le_connection_parameter_range_t existing_range;
-                        gap_get_connection_parameter_range(existing_range);
+                        gap_get_connection_parameter_range(&existing_range);
                         uint16_t le_conn_interval_min = little_endian_read_16(packet,12);
                         uint16_t le_conn_interval_max = little_endian_read_16(packet,14);
                         uint16_t le_conn_latency = little_endian_read_16(packet,16);
@@ -1489,9 +1487,9 @@ static void l2cap_acl_handler(uint8_t packet_type, uint8_t *packet, uint16_t siz
 
         default: {
             // Find channel for this channel_id and connection handle
-            l2cap_channel_t * channel = l2cap_get_channel_for_local_cid(channel_id);
-            if (channel) {
-                l2cap_dispatch_to_channel(channel, L2CAP_DATA_PACKET, &packet[COMPLETE_L2CAP_HEADER], size-COMPLETE_L2CAP_HEADER);
+            l2cap_channel_t * l2cap_channel = l2cap_get_channel_for_local_cid(channel_id);
+            if (l2cap_channel) {
+                l2cap_dispatch_to_channel(l2cap_channel, L2CAP_DATA_PACKET, &packet[COMPLETE_L2CAP_HEADER], size-COMPLETE_L2CAP_HEADER);
             }
             break;
         }
@@ -1501,7 +1499,7 @@ static void l2cap_acl_handler(uint8_t packet_type, uint8_t *packet, uint16_t siz
 }
 
 // finalize closed channel - l2cap_handle_disconnect_request & DISCONNECTION_RESPONSE
-void l2cap_finialize_channel_close(l2cap_channel_t *channel){
+void l2cap_finialize_channel_close(l2cap_channel_t * channel){
     channel->state = L2CAP_STATE_CLOSED;
     l2cap_emit_channel_closed(channel);
     // discard channel

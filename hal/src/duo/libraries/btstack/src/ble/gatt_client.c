@@ -45,6 +45,7 @@
 #include "att_dispatch.h"
 #include "ble/ad_parser.h"
 #include "ble/att_db.h"
+#include "ble/core.h"
 #include "ble/gatt_client.h"
 #include "ble/le_device_db.h"
 #include "ble/sm.h"
@@ -452,13 +453,8 @@ static void emit_event_new(btstack_packet_handler_t callback, uint8_t * packet, 
     (*callback)(HCI_EVENT_PACKET, 0, packet, size);
 }
 
-/**
- * @brief Register for notifications and indications of a characteristic enabled by gatt_client_write_client_characteristic_configuration
- * @param notification struct used to store registration
- * @param con_handle
- * @param characteristic
- */
-void gatt_client_listen_for_characteristic_value_updates(gatt_client_notification_t * notification, hci_con_handle_t con_handle, gatt_client_characteristic_t * characteristic){
+void gatt_client_listen_for_characteristic_value_updates(gatt_client_notification_t * notification, btstack_packet_handler_t packet_handler, hci_con_handle_t con_handle, gatt_client_characteristic_t * characteristic){
+    notification->callback = packet_handler;
     notification->con_handle = con_handle;
     notification->attribute_handle = characteristic->value_handle;
     btstack_linked_list_add(&gatt_client_value_listeners, (btstack_linked_item_t*) notification);
@@ -468,10 +464,10 @@ static void emit_event_to_registered_listeners(hci_con_handle_t con_handle, uint
     btstack_linked_list_iterator_t it;    
     btstack_linked_list_iterator_init(&it, &gatt_client_value_listeners);
     while (btstack_linked_list_iterator_has_next(&it)){
-        gatt_client_notification_t * registration = (gatt_client_notification_t*) btstack_linked_list_iterator_next(&it);
-        if (registration->con_handle != con_handle) continue;
-        if (registration->attribute_handle != attribute_handle) continue;
-        (*registration->callback)(HCI_EVENT_PACKET, 0, packet, size);
+        gatt_client_notification_t * notification = (gatt_client_notification_t*) btstack_linked_list_iterator_next(&it);
+        if (notification->con_handle != con_handle) continue;
+        if (notification->attribute_handle != attribute_handle) continue;
+        (*notification->callback)(HCI_EVENT_PACKET, 0, packet, size);
     } 
 }
 
@@ -797,7 +793,10 @@ static void gatt_client_run(void){
 
         gatt_client_t * peripheral = (gatt_client_t *) it;
 
-        if (!att_dispatch_server_can_send_now(peripheral->con_handle)) return;
+        if (!att_dispatch_client_can_send_now(peripheral->con_handle)) {
+            att_dispatch_client_request_can_send_now_event(peripheral->con_handle);
+            return;
+        }
 
         // log_info("- handle_peripheral_list, mtu state %u, client state %u", peripheral->mtu_state, peripheral->gatt_client_state);
         
@@ -1019,6 +1018,10 @@ static void gatt_client_hci_event_packet_handler(uint8_t packet_type, uint16_t c
 }
 
 static void gatt_client_att_packet_handler(uint8_t packet_type, uint16_t handle, uint8_t *packet, uint16_t size){
+
+    if (packet_type == HCI_EVENT_PACKET && packet[0] == L2CAP_EVENT_CAN_SEND_NOW){
+        gatt_client_run();
+    }
 
     if (packet_type != ATT_DATA_PACKET) return;
 
@@ -1605,16 +1608,15 @@ uint8_t gatt_client_read_multiple_characteristic_values(btstack_packet_handler_t
     return 0;
 }
 
-uint8_t gatt_client_write_value_of_characteristic_without_response(btstack_packet_handler_t callback, hci_con_handle_t con_handle, uint16_t value_handle, uint16_t value_length, uint8_t * value){
+uint8_t gatt_client_write_value_of_characteristic_without_response(hci_con_handle_t con_handle, uint16_t value_handle, uint16_t value_length, uint8_t * value){
     gatt_client_t * peripheral = provide_context_for_conn_handle(con_handle);
     
     if (!peripheral) return BTSTACK_MEMORY_ALLOC_FAILED; 
     if (!is_ready(peripheral)) return GATT_CLIENT_IN_WRONG_STATE;
     
     if (value_length > peripheral_mtu(peripheral) - 3) return GATT_CLIENT_VALUE_TOO_LONG;
-    if (!att_dispatch_server_can_send_now(peripheral->con_handle)) return GATT_CLIENT_BUSY;
+    if (!att_dispatch_client_can_send_now(peripheral->con_handle)) return GATT_CLIENT_BUSY;
 
-    peripheral->callback = callback;
     att_write_request(ATT_WRITE_COMMAND, peripheral->con_handle, value_handle, value_length, value);
     return 0;
 }
@@ -1847,8 +1849,7 @@ void gatt_client_deserialize_characteristic(const uint8_t * packet, int offset, 
     characteristic->value_handle = little_endian_read_16(packet, offset + 2);
     characteristic->end_handle = little_endian_read_16(packet, offset + 4);
     characteristic->properties = little_endian_read_16(packet, offset + 6);
-    characteristic->uuid16 = little_endian_read_16(packet, offset + 8);
-    reverse_128(&packet[offset+10], characteristic->uuid128);
+    reverse_128(&packet[offset+8], characteristic->uuid128);
     if (uuid_has_bluetooth_prefix(characteristic->uuid128)){
         characteristic->uuid16 = big_endian_read_32(characteristic->uuid128, 0);
     }

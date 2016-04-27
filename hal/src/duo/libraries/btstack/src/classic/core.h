@@ -36,63 +36,16 @@
  */
 
 // *****************************************************************************
-//
-//  GSM model 
-//
+//  Core header for all Classic protocols and profiles
 // *****************************************************************************
 
+#ifndef __CLASSIC_CORE
+#define __CLASSIC_CORE
 
-#ifndef BTSTACK_HFP_GSM_MODEL_H
-#define BTSTACK_HFP_GSM_MODEL_H
+#include "btstack_config.h"
 
-#include "hci.h"
-#include "sdp_client_rfcomm.h"
-#include "hfp.h"
-
-#if defined __cplusplus
-extern "C" {
-#endif
-
-/* API_START */
-typedef struct {
-    uint8_t used_slot;
-    hfp_enhanced_call_status_t enhanced_status;
-    hfp_enhanced_call_dir_t direction;
-    hfp_enhanced_call_mode_t mode;
-    hfp_enhanced_call_mpty_t mpty;
-    // TODO: sort on drop call, so that index corresponds to table index
-    int index;
-    uint8_t clip_type;
-    char    clip_number[25];
-} hfp_gsm_call_t;
-
-hfp_callheld_status_t hfp_gsm_callheld_status(void);
-hfp_call_status_t hfp_gsm_call_status(void);
-hfp_callsetup_status_t hfp_gsm_callsetup_status(void);
-
-int hfp_gsm_get_number_of_calls(void);
-char * hfp_gsm_last_dialed_number(void);
-void hfp_gsm_clear_last_dialed_number(void);
-
-
-hfp_gsm_call_t * hfp_gsm_call(int index);
-
-int hfp_gsm_call_possible(void);
-
-uint8_t hfp_gsm_clip_type(void);
-char *  hfp_gsm_clip_number(void);
-
-void hfp_gsm_init(void);
-
-void hfp_gsm_handle_event_with_clip(hfp_ag_call_event_t event, uint8_t type, const char * number);
-void hfp_gsm_handle_event_with_call_index(hfp_ag_call_event_t event, uint8_t index);
-void hfp_gsm_handle_event_with_call_number(hfp_ag_call_event_t event, const char * number);
-void hfp_gsm_handle_event(hfp_ag_call_event_t event);
-
-/* API_END */
-
-#if defined __cplusplus
-}
+#ifndef ENABLE_CLASSIC
+#error "ENABLE_CLASSIC not defined but Classic protocol or profile include. Please add ENABLE_CLASSIC in btstack_config.h, or remove all Classic protocols and profiles"
 #endif
 
 #endif

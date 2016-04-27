@@ -40,15 +40,14 @@
  */
 
 #include "btstack_config.h"
-#include "classic/sdp_client.h"
-
-#include "hci_cmd.h"
-
+#include "btstack_debug.h"
 #include "btstack_event.h"
-#include "l2cap.h"
+#include "classic/core.h"
+#include "classic/sdp_client.h"
 #include "classic/sdp_server.h"
 #include "classic/sdp_util.h"
-#include "btstack_debug.h"
+#include "hci_cmd.h"
+#include "l2cap.h"
 
 // Types SDP Parser - Data Element stream helper
 typedef enum { 
@@ -312,21 +311,9 @@ void sdp_parser_handle_done(uint8_t status){
     (*sdp_parser_callback)(HCI_EVENT_PACKET, 0, event, sizeof(event)); 
 }
 
-static void sdp_client_emit_busy(btstack_packet_handler_t callback){
-    log_error("sdp_client query initiated when not ready");
-    uint8_t event[] = { SDP_EVENT_QUERY_COMPLETE, 1, SDP_QUERY_BUSY};
-    (*callback)(HCI_EVENT_PACKET, 0, event, sizeof(event));
-}
-
 // SDP Client
 
 // TODO: inline if not needed (des(des))
-
-static int sdp_client_can_send_now(uint16_t channel){
-    if (sdp_client_state != W2_SEND) return 0;
-    if (!l2cap_can_send_packet_now(channel)) return 0;
-    return 1;
-}
 
 static void sdp_client_parse_attribute_lists(uint8_t* packet, uint16_t length){
     sdp_parser_handle_chunk(packet, length);
@@ -334,6 +321,9 @@ static void sdp_client_parse_attribute_lists(uint8_t* packet, uint16_t length){
 
 
 static void sdp_client_send_request(uint16_t channel){
+
+    if (sdp_client_state != W2_SEND) return;
+
     l2cap_reserve_packet_buffer();
     uint8_t * data = l2cap_get_outgoing_buffer();
     uint16_t request_len = 0;
@@ -357,22 +347,8 @@ static void sdp_client_send_request(uint16_t channel){
 
     // prevent re-entrance
     sdp_client_state = W4_RESPONSE;
-    int err = l2cap_send_prepared(channel, request_len);
-    // l2cap_send_prepared shouldn't have failed as l2ap_can_send_packet_now() was true
-    switch (err){
-        case 0:
-            log_debug("l2cap_send() -> OK");
-            PDU_ID = SDP_Invalid;
-            break;
-        case BTSTACK_ACL_BUFFERS_FULL:
-            sdp_client_state = W2_SEND;
-            log_info("l2cap_send() ->BTSTACK_ACL_BUFFERS_FULL");
-            break;
-        default:
-            sdp_client_state = W2_SEND;
-            log_error("l2cap_send() -> err %d", err);
-            break;
-    }
+    PDU_ID = SDP_Invalid;
+    l2cap_send_prepared(channel, request_len);
 }
 
 
@@ -454,7 +430,7 @@ void sdp_client_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
         }
         // prepare next request and send
         sdp_client_state = W2_SEND;
-        if (sdp_client_can_send_now(sdp_cid)) sdp_client_send_request(sdp_cid);
+        l2cap_request_can_send_now_event(sdp_cid);
         return;
     }
     
@@ -475,11 +451,13 @@ void sdp_client_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             log_info("SDP Client Connected, cid %x, mtu %u.", sdp_cid, mtu);
 
             sdp_client_state = W2_SEND;
-            if (sdp_client_can_send_now(sdp_cid)) sdp_client_send_request(sdp_cid);
-        
+            l2cap_request_can_send_now_event(sdp_cid);
             break;
+
         case L2CAP_EVENT_CAN_SEND_NOW:
-            if (sdp_client_can_send_now(sdp_cid)) sdp_client_send_request(sdp_cid);
+            if(l2cap_event_can_send_now_get_local_cid(packet) == sdp_cid){
+                sdp_client_send_request(sdp_cid);
+            }
             break;
         case L2CAP_EVENT_CHANNEL_CLOSED: {
             if (sdp_cid != little_endian_read_16(packet, 2)) {
@@ -694,11 +672,10 @@ int sdp_client_ready(void){
     return sdp_client_state == INIT;
 }
 
-void sdp_client_query(btstack_packet_handler_t callback, bd_addr_t remote, const uint8_t * des_service_search_pattern, const uint8_t * des_attribute_id_list){
-    if (!sdp_client_ready()) {
-        sdp_client_emit_busy(callback);
-        return;
-    }
+uint8_t sdp_client_query(btstack_packet_handler_t callback, bd_addr_t remote, const uint8_t * des_service_search_pattern, const uint8_t * des_attribute_id_list){
+
+    if (!sdp_client_ready()) return SDP_QUERY_BUSY;
+
     sdp_parser_init(callback);
     service_search_pattern = des_service_search_pattern;
     attribute_id_list = des_attribute_id_list;
@@ -707,32 +684,30 @@ void sdp_client_query(btstack_packet_handler_t callback, bd_addr_t remote, const
 
     sdp_client_state = W4_CONNECT;
     l2cap_create_channel(sdp_client_packet_handler, remote, PSM_SDP, l2cap_max_mtu(), NULL);
+    return 0;
 }
 
-void sdp_client_query_uuid16(btstack_packet_handler_t callback, bd_addr_t remote, uint16_t uuid){
-    if (!sdp_client_ready()){
-        sdp_client_emit_busy(callback);
-        return;
-    }
+uint8_t sdp_client_query_uuid16(btstack_packet_handler_t callback, bd_addr_t remote, uint16_t uuid){
+
+    if (!sdp_client_ready()) return SDP_QUERY_BUSY;
+
     uint8_t * service_service_search_pattern = sdp_service_search_pattern_for_uuid16(uuid);
-    sdp_client_query(callback, remote, service_service_search_pattern, des_attributeIDList);
+    return sdp_client_query(callback, remote, service_service_search_pattern, des_attributeIDList);
 }
 
-void sdp_client_query_uuid128(btstack_packet_handler_t callback, bd_addr_t remote, const uint8_t* uuid){
-    if (!sdp_client_ready()){
-        sdp_client_emit_busy(callback);
-        return;
-    }
+uint8_t sdp_client_query_uuid128(btstack_packet_handler_t callback, bd_addr_t remote, const uint8_t* uuid){
+
+    if (!sdp_client_ready()) return SDP_QUERY_BUSY;
+
     uint8_t * service_service_search_pattern = sdp_service_search_pattern_for_uuid128(uuid);
-    sdp_client_query(callback, remote, service_service_search_pattern, des_attributeIDList);
+    return sdp_client_query(callback, remote, service_service_search_pattern, des_attributeIDList);
 }
 
 #ifdef ENABLE_SDP_EXTRA_QUERIES
-void sdp_client_service_attribute_search(btstack_packet_handler_t callback, bd_addr_t remote, uint32_t search_service_record_handle, uint8_t * des_attribute_id_list){
-    if (!sdp_client_ready()) {
-        sdp_client_emit_busy(callback);
-        return;
-    }
+uint8_t sdp_client_service_attribute_search(btstack_packet_handler_t callback, bd_addr_t remote, uint32_t search_service_record_handle, uint8_t * des_attribute_id_list){
+
+    if (!sdp_client_ready()) return SDP_QUERY_BUSY;
+
     sdp_parser_init(callback);
     serviceRecordHandle = search_service_record_handle;
     attribute_id_list = des_attribute_id_list;
@@ -741,13 +716,13 @@ void sdp_client_service_attribute_search(btstack_packet_handler_t callback, bd_a
 
     sdp_client_state = W4_CONNECT;
     l2cap_create_channel(sdp_client_packet_handler, remote, PSM_SDP, l2cap_max_mtu(), NULL);
+    return 0;
 }
 
-void sdp_client_service_search(btstack_packet_handler_t callback, bd_addr_t remote, uint8_t * des_service_search_pattern){
-    if (!sdp_client_ready()) {
-        sdp_client_emit_busy(callback);
-        return;
-    }
+uint8_t sdp_client_service_search(btstack_packet_handler_t callback, bd_addr_t remote, uint8_t * des_service_search_pattern){
+
+    if (!sdp_client_ready()) return SDP_QUERY_BUSY;
+
     sdp_parser_init(callback);
     service_search_pattern = des_service_search_pattern;
     continuationStateLen = 0;
@@ -755,6 +730,7 @@ void sdp_client_service_search(btstack_packet_handler_t callback, bd_addr_t remo
 
     sdp_client_state = W4_CONNECT;
     l2cap_create_channel(sdp_client_packet_handler, remote, PSM_SDP, l2cap_max_mtu(), NULL);
+    return 0;
 }
 #endif
 

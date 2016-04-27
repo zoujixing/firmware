@@ -67,10 +67,35 @@ void btstack_run_loop_set_timer_handler(btstack_timer_source_t *ts, void (*proce
     ts->process = process;
 };
 
-void btstack_run_loop_set_data_source_handler(btstack_data_source_t *ds, int (*process)(btstack_data_source_t *_ds)){
+void btstack_run_loop_set_data_source_handler(btstack_data_source_t *ds, void (*process)(btstack_data_source_t *_ds,  btstack_data_source_callback_type_t callback_type)){
     ds->process = process;
 };
 
+void btstack_run_loop_set_data_source_fd(btstack_data_source_t *ds, int fd){
+    ds->fd = fd;
+}
+
+int btstack_run_loop_get_data_source_fd(btstack_data_source_t *ds){
+    return ds->fd;
+}
+
+void btstack_run_loop_enable_data_source_callbacks(btstack_data_source_t *ds, uint16_t callbacks){
+    btstack_run_loop_assert();
+    if (the_run_loop->enable_data_source_callbacks){
+        return the_run_loop->enable_data_source_callbacks(ds, callbacks);
+    } else {
+        log_error("btstack_run_loop_remove_data_source not implemented");
+    }
+}
+
+void btstack_run_loop_disable_data_source_callbacks(btstack_data_source_t *ds, uint16_t callbacks){
+    btstack_run_loop_assert();
+    if (the_run_loop->disable_data_source_callbacks){
+        return the_run_loop->disable_data_source_callbacks(ds, callbacks);
+    } else {
+        log_error("btstack_run_loop_disable_data_source_callbacks not implemented");
+    }
+}
 
 /**
  * Add data_source to run_loop
@@ -168,4 +193,3 @@ void btstack_run_loop_deInit(void)
 {
 	the_run_loop = NULL;
 }
-
