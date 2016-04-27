@@ -39,12 +39,6 @@ const hci_transport_config_uart_t hci_uart_config = {
     NULL
 };
 
-enum {
-    SET_ADVERTISEMENT_PARAMS  = 1 << 0,
-    SET_ADVERTISEMENT_DATA    = 1 << 1,
-    SET_ADVERTISEMENT_ENABLED = 1 << 2,
-};
-
 /**@brief notify/indicate data node */
 typedef struct{
     uint16_t handle;
@@ -54,7 +48,7 @@ typedef struct{
 
 /**@brief Queue for notify/indicate */
 typedef struct{
-    hal_notifyData_t queue[MAX_NO_NOTIFY_DATA_QUEUE];
+    hal_notifyData_t queue[MAX_NR_NOTIFY_DATA_QUEUE];
     uint8_t head;
     uint8_t tail;
 }hal_notifyDataQueue_t;
@@ -64,8 +58,7 @@ static hal_notifyDataQueue_t notify_queue={.head=0,.tail=0};
 /**@brief btstack state. */
 static int btstack_state;
 static uint8_t hci_init_flag = 0;
-
-static uint16_t le_peripheral_todos = 0;
+static hci_con_handle_t connect_handle = 0xFFFF;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 /**@brief connect timeout. */
@@ -80,7 +73,7 @@ typedef struct{
 	uint8_t used_flag;
 }client_notification_t;
 
-static client_notification_t client_notify_queue[MAX_NO_CLIENT_NOTIFY_QUEUE];
+static client_notification_t client_notify_queue[MAX_NR_CLIENT_NOTIFY_QUEUE];
 
 /**@brief BD address. */
 static bool have_custom_addr;
@@ -94,26 +87,26 @@ static uint8_t hal_btstack_thread_quit=1;
 static void hal_stack_thread(uint32_t arg);
 
 /**@brief Gatt read/write callback handler. */
-static uint16_t (*gattReadCallback)(uint16_t handle, uint8_t * buffer, uint16_t buffer_size);
-static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size);
+static gattReadCallback_t        gattReadCallback = NULL;
+static gattWriteCallback_t       gattWriteCallback = NULL;
 
-static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement) = NULL;
-static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
-static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
-static void (*gattServiceDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_service_t *service) = NULL;
-static void (*gattCharsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_t *characteristic) = NULL;
-static void (*gattCharsDescriptorsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_descriptor_t *characteristic) = NULL;
+static bleAdvertismentCallback_t bleAdvertismentCallback = NULL;
 
-static void (*gattCharacteristicReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattCharacteristicWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+static bleConnectedCallback_t    bleConnectedCallback = NULL;
+static bleDisconnectedCallback_t bleDisconnectedCallback = NULL;
 
-static void (*gattCharsDescriptorReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattCharsDescriptorticWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+static gattServicesDiscoveredCallback_t    gattServiceDiscoveredCallback = NULL;
+static gattCharsDiscoveredCallback_t       gattCharsDiscoveredCallback = NULL;
+static gattDescriptorsDiscoveredCallback_t gattDescriptorsDiscoveredCallback = NULL;
 
-static void (*gattWriteClientCharsConfigCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
-static void (*gattNotifyUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattIndicateUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+static gattCharacteristicReadCallback_t    gattCharacteristicReadCallback = NULL;
+static gattCharacteristicWrittenCallback_t gattCharacteristicWrittenCallback = NULL;
+static gattDescriptorReadCallback_t        gattDescriptorReadCallback = NULL;
+static gattDescriptorWrittenCallback_t     gattDescriptorticWrittenCallback = NULL;
 
+static gattWriteCCCDCallback_t        gattWriteCCCDCallback = NULL;
+static gattNotifyUpdateCallback_t     gattNotifyUpdateCallback = NULL;
+static gattIndicateUpdateCallback_t   gattIndicateUpdateCallback = NULL;
 
 static uint8_t notify_queueFreeSize(void);
 static uint8_t notify_queneUsedSize(void);
@@ -124,9 +117,9 @@ static void    client_notification_init(void);
 static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16_t con_handle, gatt_client_characteristic_t *characteristic);
 static void    client_notification_remove(uint16_t con_handle, gatt_client_characteristic_t *characteristic);
 
-/**
- * Function Declare
- */
+/********************************************
+ *         Function Declare
+ *******************************************/
 /**
  * @brief Thread for BLE loop.
  */
@@ -258,22 +251,17 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 		case BTSTACK_EVENT_STATE:
 			btstack_state = packet[2];
 			// bt stack activated, get started
-			if (packet[2] == HCI_STATE_WORKING) {
-				le_peripheral_todos |= SET_ADVERTISEMENT_PARAMS
-									| SET_ADVERTISEMENT_DATA
-									| SET_ADVERTISEMENT_ENABLED;
-			}
 			break;
 
 		case HCI_EVENT_DISCONNECTION_COMPLETE:
-			if (bleDeviceDisconnectedCallback) {
-				handle = little_endian_read_16(packet, 3);
-				(*bleDeviceDisconnectedCallback)(handle);
+			handle = little_endian_read_16(packet, 3);
+			connect_handle = 0xFFFF;
+			if (bleDisconnectedCallback) {
+				(*bleDisconnectedCallback)(handle);
 			}
-			le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
 			break;
 
-		case GAP_LE_EVENT_ADVERTISING_REPORT:
+		case GAP_EVENT_ADVERTISING_REPORT:
 			if(bleAdvertismentCallback) {
 				advertisementReport_t report;
 				parseAdvertisemetReport(&report, packet);
@@ -296,12 +284,13 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 					handle = little_endian_read_16(packet, 4);
 					log_info("Connection complete, handle 0x%04x\n", handle);
 					btstack_run_loop_remove_timer(&connection_timer);
-					if (!bleDeviceConnectedCallback)
+					if (!bleConnectedCallback)
 						break;
 					if (packet[3])
-						(*bleDeviceConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0x0000);
+						(*bleConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0xFFFF);
 					else
-						(*bleDeviceConnectedCallback)(BLE_STATUS_OK, handle);
+						(*bleConnectedCallback)(BLE_STATUS_OK, handle);
+						connect_handle = handle;
 					break;
 				default:
 					break;
@@ -355,11 +344,11 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
 			break;
 		// Scan descriptors of characteristic.
 		case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
-			if(gattCharsDescriptorsDiscoveredCallback)
+			if(gattDescriptorsDiscoveredCallback)
 			{
 				gatt_client_characteristic_descriptor_t chars_descriptor;
 				extract_characteristic_descriptors(&chars_descriptor, packet);
-				gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_OK, con_handle, &chars_descriptor);
+				gattDescriptorsDiscoveredCallback(BLE_STATUS_OK, con_handle, &chars_descriptor);
 			}
 			break;
 		// Read characteristic value.
@@ -377,12 +366,12 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
 			break;
 		// Read characteristic descriptors.
 		case GATT_EVENT_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
-			if(gattCharsDescriptorReadCallback)
+			if(gattDescriptorReadCallback)
 			{
 				value_handle = little_endian_read_16(packet, 4);
 				value_length = little_endian_read_16(packet, 6);
 				value = &packet[8];
-				gattCharsDescriptorReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+				gattDescriptorReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
 			}
 			break;
 		// Read long characteristic descriptors.
@@ -425,11 +414,11 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
     				break;
 				case GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT:
 					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorsDiscoveredCallback)
-					    gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+					if(gattDescriptorsDiscoveredCallback)
+					    gattDescriptorsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
 					break;
 				case GATT_CLIENT_READ_VALUE_RESULT:
-					//packet:0xa0 0x03 con_handle status.
+					// packet:0xa0 0x03 con_handle status.
 					gatt_client_operation = GATT_CLIENT_IDLE;
 					if(gattCharacteristicReadCallback)
 						gattCharacteristicReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
@@ -442,26 +431,25 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
 
 				case GATT_CLIENT_READ_DESCRIPTOR_RESULT:
 					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorReadCallback)
-						gattCharsDescriptorReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
+					if(gattDescriptorReadCallback)
+						gattDescriptorReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
 					break;
 
 				case GATT_CLIENT_WRITE_DESCRIPTOR_RESULT:
 					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorticWrittenCallback)
-						gattCharsDescriptorticWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+					if(gattDescriptorticWrittenCallback)
+						gattDescriptorticWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
 					break;
 
 				case GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT:
 					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattWriteClientCharsConfigCallback)
-						gattWriteClientCharsConfigCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+					if(gattWriteCCCDCallback)
+						gattWriteCCCDCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
 					break;
 
 				default:
 					break;
 			}
-
 			break;
 
 		default:
@@ -480,19 +468,19 @@ void hal_btstack_init(void)
         wlan_activate();
 
         // reset handler
-        bleAdvertismentCallback                = NULL;
-        bleDeviceConnectedCallback             = NULL;
-        bleDeviceDisconnectedCallback          = NULL;
-        gattServiceDiscoveredCallback          = NULL;
-        gattCharsDiscoveredCallback            = NULL;
-        gattCharsDescriptorsDiscoveredCallback = NULL;
-        gattCharacteristicReadCallback         = NULL;
-        gattCharacteristicWrittenCallback      = NULL;
-        gattCharsDescriptorReadCallback        = NULL;
-        gattCharsDescriptorticWrittenCallback  = NULL;
-        gattWriteClientCharsConfigCallback     = NULL;
-        gattNotifyUpdateCallback               = NULL;
-        gattIndicateUpdateCallback             = NULL;
+        bleAdvertismentCallback           = NULL;
+        bleConnectedCallback              = NULL;
+        bleDisconnectedCallback           = NULL;
+        gattServiceDiscoveredCallback     = NULL;
+        gattCharsDiscoveredCallback       = NULL;
+        gattDescriptorsDiscoveredCallback = NULL;
+        gattCharacteristicReadCallback    = NULL;
+        gattCharacteristicWrittenCallback = NULL;
+        gattDescriptorReadCallback        = NULL;
+        gattDescriptorticWrittenCallback  = NULL;
+        gattWriteCCCDCallback             = NULL;
+        gattNotifyUpdateCallback          = NULL;
+        gattIndicateUpdateCallback        = NULL;
 
         att_db_util_init();
 
@@ -539,6 +527,7 @@ void hal_btstack_init(void)
         hal_btstack_thread_quit = 0;
         wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
         hci_init_flag = 1;
+        connect_handle = 0xFFFF;
     }
 }
 
@@ -561,14 +550,14 @@ void hal_btstack_loop_execute(void)
 {
     if(hci_init_flag)
     {
-        if(notify_queneUsedSize() && att_server_can_send_packet_now())
+        if(notify_queneUsedSize() && att_server_can_send_packet_now(connect_handle))
         {
             hal_notifyData_t data;
             notify_queneRead(&data);
             if((data.data_flag_len & 0x80) == 0x00)
-                att_server_notify(data.handle, data.data, data.data_flag_len&0x7F);
+                att_server_notify(connect_handle, data.handle, data.data, data.data_flag_len&0x7F);
             else
-                att_server_indicate(data.handle, data.data, data.data_flag_len&0x7F);
+                att_server_indicate(connect_handle, data.handle, data.data, data.data_flag_len&0x7F);
         }
         btstack_run_loop_execute();
     }
@@ -586,9 +575,9 @@ void hal_btstack_setTimer(btstack_timer_source_t *ts, uint32_t timeout_in_ms)
     btstack_run_loop_set_timer(ts, timeout_in_ms);
 }
 
-void hal_btstack_setTimerHandler(btstack_timer_source_t *ts, void (*process)(btstack_timer_source_t *_ts))
+void hal_btstack_setTimerHandler(btstack_timer_source_t *ts, btstack_timer_handler_t handler)
 {
-    btstack_run_loop_set_timer_handler(ts, process);
+    btstack_run_loop_set_timer_handler(ts, handler);
 }
 
 void hal_btstack_addTimer(btstack_timer_source_t *timer)
@@ -719,17 +708,17 @@ void hal_btstack_stopAdvertising(void)
 /**
  * @brief Set connected Callback.
  */
-void hal_btstack_setConnectedCallback(void (*callback)(BLEStatus_t status, uint16_t handle))
+void hal_btstack_setConnectedCallback(bleConnectedCallback_t cb)
 {
-    bleDeviceConnectedCallback = callback;
+    bleConnectedCallback = cb;
 }
 
 /**
  * @brief Set disconnected Callback.
  */
-void hal_btstack_setDisconnectedCallback(void (*callback)(uint16_t handle))
+void hal_btstack_setDisconnectedCallback(bleDisconnectedCallback_t cb)
 {
-    bleDeviceDisconnectedCallback = callback;
+    bleDisconnectedCallback = cb;
 }
 
 /**
@@ -767,7 +756,8 @@ uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
  */
 void hal_btstack_setConnParamsRange(le_connection_parameter_range_t range)
 {
-	gap_set_connection_parameter_range(range);
+	le_connection_parameter_range_t temp_range = range;
+	gap_set_connection_parameter_range(&temp_range);
 }
 
 /**
@@ -797,7 +787,7 @@ void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16
 /**
  * @brief Set advertisement report callback for scanning device.
  */
-void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report))
+void hal_btstack_setBLEAdvertisementCallback(bleAdvertismentCallback_t cb)
 {
     bleAdvertismentCallback = cb;
 }
@@ -867,7 +857,7 @@ int hal_btstack_attServerSendIndicate(uint16_t value_handle, uint8_t *value, uin
  *
  * @param[in]  cb
  */
-void hal_btstack_setGattCharsRead(uint16_t (*cb)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size))
+void hal_btstack_setGattCharsRead(gattReadCallback_t cb)
 {
     gattReadCallback = cb;
 }
@@ -877,7 +867,7 @@ void hal_btstack_setGattCharsRead(uint16_t (*cb)(uint16_t handle, uint8_t *buffe
  *
  * @param[in]  cb
  */
-void hal_btstack_setGattCharsWrite(int (*cb)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size))
+void hal_btstack_setGattCharsWrite(gattWriteCallback_t cb)
 {
     gattWriteCallback = cb;
 }
@@ -944,7 +934,7 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 /**
  * @brief Register callback for discovering service.
  */
-void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_service_t *service))
+void hal_btstack_setGattServiceDiscoveredCallback(gattServicesDiscoveredCallback_t cb)
 {
 	gattServiceDiscoveredCallback = cb;
 }
@@ -952,7 +942,7 @@ void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status,
 /**
  * @brief Register callback for discovering characteristic.
  */
-void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_t *characteristic))
+void hal_btstack_setGattCharsDiscoveredCallback(gattCharsDiscoveredCallback_t cb)
 {
 	gattCharsDiscoveredCallback = cb;
 }
@@ -960,15 +950,15 @@ void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, u
 /**
  * @brief Register callback for discovering descriptors of characteristic.
  */
-void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_descriptor_t *characteristic))
+void hal_btstack_setGattDescriptorsDiscoveredCallback(gattDescriptorsDiscoveredCallback_t cb)
 {
-	gattCharsDescriptorsDiscoveredCallback = cb;
+	gattDescriptorsDiscoveredCallback = cb;
 }
 
 /**
  * @brief Register callback for reading characteristic value.
  */
-void hal_btstack_setGattCharacteristicReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattCharacteristicReadCallback(gattCharacteristicReadCallback_t cb)
 {
 	gattCharacteristicReadCallback = cb;
 }
@@ -976,7 +966,7 @@ void hal_btstack_setGattCharacteristicReadCallback(void (*cb)(BLEStatus_t status
 /**
  * @brief Register callback for writing characteristic value.
  */
-void hal_btstack_setGattCharacteristicWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattCharacteristicWrittenCallback(gattCharacteristicWrittenCallback_t cb)
 {
 	gattCharacteristicWrittenCallback = cb;
 }
@@ -984,36 +974,36 @@ void hal_btstack_setGattCharacteristicWrittenCallback(void (*cb)(BLEStatus_t sta
 /**
  * @brief Register callback for reading characteristic descriptor value.
  */
-void hal_btstack_setGattCharsDescriptorReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattDescriptorReadCallback(gattDescriptorReadCallback_t cb)
 {
-	gattCharsDescriptorReadCallback = cb;
+	gattDescriptorReadCallback = cb;
 }
 
 /**
  * @brief Register callback for writing characteristic descriptor value.
  */
-void hal_btstack_setGattCharsDescriptorWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattDescriptorWrittenCallback(gattDescriptorWrittenCallback_t cb)
 {
-	gattCharsDescriptorticWrittenCallback = cb;
+	gattDescriptorticWrittenCallback = cb;
 }
 
 /**
  * @brief Register callback for enable/disable CCCD.
  */
-void hal_btstack_setGattWriteClientCharacteristicConfigCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattWriteCCCDCallback(gattWriteCCCDCallback_t cb)
 {
-	gattWriteClientCharsConfigCallback = cb;
+	gattWriteCCCDCallback = cb;
 }
 
 /**
  * @brief Register callback for value update.
  */
-void hal_btstack_setGattNotifyUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattNotifyUpdateCallback(gattNotifyUpdateCallback_t cb)
 {
 	gattNotifyUpdateCallback = cb;
 }
 
-void hal_btstack_setGattIndicateUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattIndicateUpdateCallback(gattIndicateUpdateCallback_t cb)
 {
 	gattIndicateUpdateCallback = cb;
 }
@@ -1165,10 +1155,10 @@ uint8_t hal_btstack_readLongValueOfCharacteristicUsingValueHandleWithOffset(uint
 /**
  * @brief Writes the characteristic value using the characteristic's value handle without an acknowledgment that the write was successfully performed.
  */
-uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t  * data)
+uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t  *data)
 {
 	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
-	return gatt_client_write_value_of_characteristic_without_response(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+	return gatt_client_write_value_of_characteristic_without_response(con_handle, characteristic_value_handle, length, data);
 }
 
 /**
@@ -1312,7 +1302,7 @@ uint8_t hal_btstack_WriteClientCharacteristicConfiguration(uint16_t con_handle, 
 
 void hal_btstack_listenForCharacteristicValueUpdates(gatt_client_notification_t *notification, uint16_t con_handle, gatt_client_characteristic_t *characteristic)
 {
-	gatt_client_listen_for_characteristic_value_updates(notification, con_handle, characteristic);
+	gatt_client_listen_for_characteristic_value_updates(notification, handle_gatt_client_event, con_handle, characteristic);
 }
 
 
@@ -1327,7 +1317,7 @@ void hal_btstack_listenForCharacteristicValueUpdates(gatt_client_notification_t 
  */
 static uint8_t notify_queueFreeSize(void)
 {
-    return ( MAX_NO_NOTIFY_DATA_QUEUE - 1 - ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE));
+    return ( MAX_NR_NOTIFY_DATA_QUEUE - 1 - ((MAX_NR_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NR_NOTIFY_DATA_QUEUE));
 }
 
 /**
@@ -1338,7 +1328,7 @@ static uint8_t notify_queueFreeSize(void)
  */
 static uint8_t notify_queneUsedSize(void)
 {
-    return ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE);
+    return ((MAX_NR_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NR_NOTIFY_DATA_QUEUE);
 }
 
 /**
@@ -1353,7 +1343,7 @@ static uint8_t notify_queneWrite(hal_notifyData_t *dat)
         return 0;
 
     notify_queue.queue[notify_queue.head] = *dat;
-    notify_queue.head = (notify_queue.head + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    notify_queue.head = (notify_queue.head + 1) % MAX_NR_NOTIFY_DATA_QUEUE;
 
     return 1;
 }
@@ -1370,7 +1360,7 @@ static uint8_t notify_queneRead(hal_notifyData_t *dat)
         return 0;
 
     *dat = notify_queue.queue[notify_queue.tail];
-    notify_queue.tail = (notify_queue.tail + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    notify_queue.tail = (notify_queue.tail + 1) % MAX_NR_NOTIFY_DATA_QUEUE;
 
     return 1;
 }
@@ -1394,7 +1384,7 @@ static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16
 {
 	uint8_t index = 0;
 
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+	for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
 		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
 		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle) {
 			// Exist
@@ -1403,17 +1393,17 @@ static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16
 		}
 	}
     // Get a available index.
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+	for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
 		if(client_notify_queue[index].used_flag == 0)
 			break;
 	}
-	if(index >= MAX_NO_CLIENT_NOTIFY_QUEUE)
+	if(index >= MAX_NR_CLIENT_NOTIFY_QUEUE)
 		return 0;
 
 	client_notify_queue[index].client_notify.callback = callback;
 	client_notify_queue[index].used_flag = 1;
 	log_info("client notify listen.");
-	gatt_client_listen_for_characteristic_value_updates(&client_notify_queue[index].client_notify, con_handle, characteristic);
+	gatt_client_listen_for_characteristic_value_updates(&client_notify_queue[index].client_notify, handle_gatt_client_event, con_handle, characteristic);
 
 	return 2;
 }
@@ -1428,7 +1418,7 @@ static void client_notification_remove(uint16_t con_handle, gatt_client_characte
 {
 	uint8_t index = 0;
 
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
+	for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
 		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
 		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle)
 		{
