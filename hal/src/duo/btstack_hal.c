@@ -659,15 +659,27 @@ void hal_btstack_setLocalName(const char *local_name)
 }
 
 /**
- * @brief Set advertising data.
+ * @brief Set advertisement data.
  *
  * @param[in]  size  The size of advertising data, no more than 31bytes.
  * @param[in]  data  Advertising data.
  *
  */
-void hal_btstack_setAdvData(uint16_t size, uint8_t *data)
+void hal_btstack_setAdvertisementData(uint16_t size, uint8_t *data)
 {
     gap_advertisements_set_data(size, data);
+}
+
+/**
+ * @brief Set scan respons data.
+ *
+ * @param[in]  size  The size of scanResponse data, no more than 31bytes.
+ * @param[in]  data  The buffer pointer of scanResponse data.
+ *
+ */
+void hal_btstack_setScanResponseData(uint16_t size, uint8_t *data)
+{
+	gap_scan_response_set_data(size, data);
 }
 
 /**
@@ -684,7 +696,7 @@ void hal_btstack_setAdvData(uint16_t size, uint8_t *data)
  * @param[in]  filter_policy
  *
  */
-void hal_btstack_setAdvParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
+void hal_btstack_setAdvertisementParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
 {
     gap_advertisements_set_params(adv_int_min,adv_int_max,adv_type,dir_addr_type,dir_addr,channel_map,filter_policy);
 }

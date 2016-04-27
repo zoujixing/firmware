@@ -216,10 +216,10 @@ void ble_provision_init(void)
         uint8_t adv_type = 0;
         bd_addr_t null_addr;
         memset(null_addr, 1, 6);
-        hal_btstack_setAdvParams(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
+        hal_btstack_setAdvertisementParams(adv_int_min, adv_int_max, adv_type, 0, null_addr, 0x07, 0x00);
 
         // set ble advertising.
-        hal_btstack_setAdvData(sizeof(adv_data), (uint8_t *)adv_data);
+        hal_btstack_setAdvertisementData(sizeof(adv_data), (uint8_t *)adv_data);
 
         INFO("BLE Provisioning begin.\n");
     }
