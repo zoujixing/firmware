@@ -16,15 +16,15 @@
 
 typedef enum {
     GATT_CLIENT_IDLE,
-	GATT_CLIENT_SERVICE_RESULT,
-	GATT_CLIENT_INCLUDE_SERVICE_RESULT,
-	GATT_CLIENT_CHARACTERISTIC_RESULT,
-	GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT,
-	GATT_CLIENT_READ_VALUE_RESULT,
-	GATT_CLIENT_WRITE_VALUE_RESULT,
-	GATT_CLIENT_READ_DESCRIPTOR_RESULT,
-	GATT_CLIENT_WRITE_DESCRIPTOR_RESULT,
-	GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT,
+    GATT_CLIENT_SERVICE_RESULT,
+    GATT_CLIENT_INCLUDE_SERVICE_RESULT,
+    GATT_CLIENT_CHARACTERISTIC_RESULT,
+    GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT,
+    GATT_CLIENT_READ_VALUE_RESULT,
+    GATT_CLIENT_WRITE_VALUE_RESULT,
+    GATT_CLIENT_READ_DESCRIPTOR_RESULT,
+    GATT_CLIENT_WRITE_DESCRIPTOR_RESULT,
+    GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT,
 } gatt_client_operation_t;
 
 /**
@@ -39,12 +39,6 @@ const hci_transport_config_uart_t hci_uart_config = {
     NULL
 };
 
-enum {
-    SET_ADVERTISEMENT_PARAMS  = 1 << 0,
-    SET_ADVERTISEMENT_DATA    = 1 << 1,
-    SET_ADVERTISEMENT_ENABLED = 1 << 2,
-};
-
 /**@brief notify/indicate data node */
 typedef struct{
     uint16_t handle;
@@ -54,7 +48,7 @@ typedef struct{
 
 /**@brief Queue for notify/indicate */
 typedef struct{
-    hal_notifyData_t queue[MAX_NO_NOTIFY_DATA_QUEUE];
+    hal_notifyData_t queue[MAX_NR_NOTIFY_DATA_QUEUE];
     uint8_t head;
     uint8_t tail;
 }hal_notifyDataQueue_t;
@@ -64,8 +58,7 @@ static hal_notifyDataQueue_t notify_queue={.head=0,.tail=0};
 /**@brief btstack state. */
 static int btstack_state;
 static uint8_t hci_init_flag = 0;
-
-static uint16_t le_peripheral_todos = 0;
+static hci_con_handle_t connect_handle = 0xFFFF;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 /**@brief connect timeout. */
@@ -76,11 +69,11 @@ static gatt_client_operation_t gatt_client_operation = GATT_CLIENT_IDLE;
 
 /**@brief Gatt client notification queue. */
 typedef struct{
-	gatt_client_notification_t client_notify;
-	uint8_t used_flag;
+    gatt_client_notification_t client_notify;
+    uint8_t used_flag;
 }client_notification_t;
 
-static client_notification_t client_notify_queue[MAX_NO_CLIENT_NOTIFY_QUEUE];
+static client_notification_t client_notify_queue[MAX_NR_CLIENT_NOTIFY_QUEUE];
 
 /**@brief BD address. */
 static bool have_custom_addr;
@@ -94,26 +87,26 @@ static uint8_t hal_btstack_thread_quit=1;
 static void hal_stack_thread(uint32_t arg);
 
 /**@brief Gatt read/write callback handler. */
-static uint16_t (*gattReadCallback)(uint16_t handle, uint8_t * buffer, uint16_t buffer_size);
-static int (*gattWriteCallback)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size);
+static gattReadCallback_t        gattReadCallback = NULL;
+static gattWriteCallback_t       gattWriteCallback = NULL;
 
-static void (*bleAdvertismentCallback)(advertisementReport_t * bleAdvertisement) = NULL;
-static void (*bleDeviceConnectedCallback)(BLEStatus_t status, uint16_t handle)= NULL;
-static void (*bleDeviceDisconnectedCallback)(uint16_t handle) = NULL;
-static void (*gattServiceDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_service_t *service) = NULL;
-static void (*gattCharsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_t *characteristic) = NULL;
-static void (*gattCharsDescriptorsDiscoveredCallback)(BLEStatus_t status, uint16_t conn_handle, gatt_client_characteristic_descriptor_t *characteristic) = NULL;
+static bleAdvertismentCallback_t bleAdvertismentCallback = NULL;
 
-static void (*gattCharacteristicReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattCharacteristicWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+static bleConnectedCallback_t    bleConnectedCallback = NULL;
+static bleDisconnectedCallback_t bleDisconnectedCallback = NULL;
 
-static void (*gattCharsDescriptorReadCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattCharsDescriptorticWrittenCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
+static gattServicesDiscoveredCallback_t    gattServiceDiscoveredCallback = NULL;
+static gattCharsDiscoveredCallback_t       gattCharsDiscoveredCallback = NULL;
+static gattDescriptorsDiscoveredCallback_t gattDescriptorsDiscoveredCallback = NULL;
 
-static void (*gattWriteClientCharsConfigCallback)(BLEStatus_t status, uint16_t con_handle) = NULL;
-static void (*gattNotifyUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
-static void (*gattIndicateUpdateCallback)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t *value, uint16_t length) = NULL;
+static gattCharacteristicReadCallback_t    gattCharacteristicReadCallback = NULL;
+static gattCharacteristicWrittenCallback_t gattCharacteristicWrittenCallback = NULL;
+static gattDescriptorReadCallback_t        gattDescriptorReadCallback = NULL;
+static gattDescriptorWrittenCallback_t     gattDescriptorticWrittenCallback = NULL;
 
+static gattWriteCCCDCallback_t        gattWriteCCCDCallback = NULL;
+static gattNotifyUpdateCallback_t     gattNotifyUpdateCallback = NULL;
+static gattIndicateUpdateCallback_t   gattIndicateUpdateCallback = NULL;
 
 static uint8_t notify_queueFreeSize(void);
 static uint8_t notify_queneUsedSize(void);
@@ -124,9 +117,9 @@ static void    client_notification_init(void);
 static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16_t con_handle, gatt_client_characteristic_t *characteristic);
 static void    client_notification_remove(uint16_t con_handle, gatt_client_characteristic_t *characteristic);
 
-/**
- * Function Declare
- */
+/********************************************
+ *         Function Declare
+ *******************************************/
 /**
  * @brief Thread for BLE loop.
  */
@@ -183,11 +176,11 @@ static void extract_characteristic(gatt_client_characteristic_t * characteristic
  * @brief extract characteristic descriptor from packet.
  */
 static void extract_characteristic_descriptors(gatt_client_characteristic_descriptor_t *descriptor, uint8_t *packet){
-	descriptor->handle  = little_endian_read_16(packet, 4);
-	descriptor->uuid16 = 0;
-	reverse_128(&packet[6], descriptor->uuid128);
+    descriptor->handle  = little_endian_read_16(packet, 4);
+    descriptor->uuid16 = 0;
+    reverse_128(&packet[6], descriptor->uuid128);
     if (uuid_has_bluetooth_prefix(descriptor->uuid128)){
-    	descriptor->uuid16 = big_endian_read_32(descriptor->uuid128, 0);
+        descriptor->uuid16 = big_endian_read_32(descriptor->uuid128, 0);
     }
 }
 
@@ -247,226 +240,221 @@ static int att_write_callback(uint16_t con_handle, uint16_t att_handle, uint16_t
  */
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
 
-	if (packet_type != HCI_EVENT_PACKET)
+    if (packet_type != HCI_EVENT_PACKET)
         return;
     bd_addr_t addr;
     uint16_t handle;
     uint8_t event = hci_event_packet_get_type(packet);
     //log_info("packet_handler type 0x%02x", event);
-	switch (event)
-	{
-		case BTSTACK_EVENT_STATE:
-			btstack_state = packet[2];
-			// bt stack activated, get started
-			if (packet[2] == HCI_STATE_WORKING) {
-				le_peripheral_todos |= SET_ADVERTISEMENT_PARAMS
-									| SET_ADVERTISEMENT_DATA
-									| SET_ADVERTISEMENT_ENABLED;
-			}
-			break;
+    switch (event)
+    {
+        case BTSTACK_EVENT_STATE:
+            btstack_state = packet[2];
+            // bt stack activated, get started
+            break;
 
-		case HCI_EVENT_DISCONNECTION_COMPLETE:
-			if (bleDeviceDisconnectedCallback) {
-				handle = little_endian_read_16(packet, 3);
-				(*bleDeviceDisconnectedCallback)(handle);
-			}
-			le_peripheral_todos |= SET_ADVERTISEMENT_ENABLED;
-			break;
+        case HCI_EVENT_DISCONNECTION_COMPLETE:
+            handle = little_endian_read_16(packet, 3);
+            connect_handle = 0xFFFF;
+            if (bleDisconnectedCallback) {
+                (*bleDisconnectedCallback)(handle);
+            }
+            break;
 
-		case GAP_LE_EVENT_ADVERTISING_REPORT:
-			if(bleAdvertismentCallback) {
-				advertisementReport_t report;
-				parseAdvertisemetReport(&report, packet);
-				(*bleAdvertismentCallback)(&report);
-			}
-			break;
+        case GAP_EVENT_ADVERTISING_REPORT:
+            if(bleAdvertismentCallback) {
+                advertisementReport_t report;
+                parseAdvertisemetReport(&report, packet);
+                (*bleAdvertismentCallback)(&report);
+            }
+            break;
 
-		case HCI_EVENT_COMMAND_COMPLETE:
-			if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_bd_addr)) {
-				bd_addr_copy(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
-				log_info("Local Address: %s\n", bd_addr_to_str(addr));
-				break;
-			}
-			break;
+        case HCI_EVENT_COMMAND_COMPLETE:
+            if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_bd_addr)) {
+                bd_addr_copy(addr, &packet[OFFSET_OF_DATA_IN_COMMAND_COMPLETE + 1]);
+                log_info("Local Address: %s\n", bd_addr_to_str(addr));
+                break;
+            }
+            break;
 
-		case HCI_EVENT_LE_META:
-			switch (packet[2])
-			{
-				case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
-					handle = little_endian_read_16(packet, 4);
-					log_info("Connection complete, handle 0x%04x\n", handle);
-					btstack_run_loop_remove_timer(&connection_timer);
-					if (!bleDeviceConnectedCallback)
-						break;
-					if (packet[3])
-						(*bleDeviceConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0x0000);
-					else
-						(*bleDeviceConnectedCallback)(BLE_STATUS_OK, handle);
-					break;
-				default:
-					break;
-			}
-			break;
+        case HCI_EVENT_LE_META:
+            switch (packet[2])
+            {
+                case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
+                    handle = little_endian_read_16(packet, 4);
+                    log_info("Connection complete, handle 0x%04x\n", handle);
+                    btstack_run_loop_remove_timer(&connection_timer);
+                    if (!bleConnectedCallback)
+                        break;
+                    if (packet[3])
+                        (*bleConnectedCallback)(BLE_STATUS_CONNECTION_ERROR, 0xFFFF);
+                    else
+                        (*bleConnectedCallback)(BLE_STATUS_OK, handle);
+                        connect_handle = handle;
+                    break;
+                default:
+                    break;
+            }
+            break;
 
-		default:
-			break;
-	 }
+        default:
+            break;
+     }
 }
 
 static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
 {
-	// if (hci) event is not 4-byte aligned, event->handle causes crash
-	// workaround: check event type, assuming GATT event types are contagious
-	if (packet[0] < GATT_EVENT_QUERY_COMPLETE)
-		return;
-	if (packet[0] > GATT_EVENT_MTU)
-		return;
+    // if (hci) event is not 4-byte aligned, event->handle causes crash
+    // workaround: check event type, assuming GATT event types are contagious
+    if (packet[0] < GATT_EVENT_QUERY_COMPLETE)
+        return;
+    if (packet[0] > GATT_EVENT_MTU)
+        return;
 
-	//log_info("The packet is : ");
-	//for(uint8_t index=0; index<size; index++)
-	//	log_info("0x%02x", packet[index]);
+    //log_info("The packet is : ");
+    //for(uint8_t index=0; index<size; index++)
+    //    log_info("0x%02x", packet[index]);
 
-	uint16_t con_handle = little_endian_read_16(packet, 2);
-	uint8_t  status;
-	uint8_t  *value;
-	uint16_t value_handle;
-	uint16_t value_length;
+    uint16_t con_handle = little_endian_read_16(packet, 2);
+    uint8_t  status;
+    uint8_t  *value;
+    uint16_t value_handle;
+    uint16_t value_length;
 
-	log_info("gatt_client_event type 0x%02x", hci_event_packet_get_type(packet));
+    log_info("gatt_client_event type 0x%02x", hci_event_packet_get_type(packet));
 
-	switch(hci_event_packet_get_type(packet))
-	{   // Scan primary services.
-		case GATT_EVENT_SERVICE_QUERY_RESULT:
-			if(gattServiceDiscoveredCallback)
-			{
-				gatt_client_service_t service;
-				extract_service(&service, packet);
-				gattServiceDiscoveredCallback(BLE_STATUS_OK, con_handle, &service);
-			}
-			break;
-		// Scan characteristics of services.
-		case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
-			if(gattCharsDiscoveredCallback)
-			{
-				gatt_client_characteristic_t characteristic;
-				extract_characteristic(&characteristic,packet);
-				gattCharsDiscoveredCallback(BLE_STATUS_OK, con_handle, &characteristic);
-			}
-			break;
-		// Scan descriptors of characteristic.
-		case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
-			if(gattCharsDescriptorsDiscoveredCallback)
-			{
-				gatt_client_characteristic_descriptor_t chars_descriptor;
-				extract_characteristic_descriptors(&chars_descriptor, packet);
-				gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_OK, con_handle, &chars_descriptor);
-			}
-			break;
-		// Read characteristic value.
-		case GATT_EVENT_CHARACTERISTIC_VALUE_QUERY_RESULT:
-			if(gattCharacteristicReadCallback)
-			{
-				value_handle = little_endian_read_16(packet, 4);
-				value_length = little_endian_read_16(packet, 6);
-				value = &packet[8];
-				gattCharacteristicReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
-			}
-			break;
+    switch(hci_event_packet_get_type(packet))
+    {   // Scan primary services.
+        case GATT_EVENT_SERVICE_QUERY_RESULT:
+            if(gattServiceDiscoveredCallback)
+            {
+                gatt_client_service_t service;
+                extract_service(&service, packet);
+                gattServiceDiscoveredCallback(BLE_STATUS_OK, con_handle, &service);
+            }
+            break;
+        // Scan characteristics of services.
+        case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
+            if(gattCharsDiscoveredCallback)
+            {
+                gatt_client_characteristic_t characteristic;
+                extract_characteristic(&characteristic,packet);
+                gattCharsDiscoveredCallback(BLE_STATUS_OK, con_handle, &characteristic);
+            }
+            break;
+        // Scan descriptors of characteristic.
+        case GATT_EVENT_ALL_CHARACTERISTIC_DESCRIPTORS_QUERY_RESULT:
+            if(gattDescriptorsDiscoveredCallback)
+            {
+                gatt_client_characteristic_descriptor_t chars_descriptor;
+                extract_characteristic_descriptors(&chars_descriptor, packet);
+                gattDescriptorsDiscoveredCallback(BLE_STATUS_OK, con_handle, &chars_descriptor);
+            }
+            break;
+        // Read characteristic value.
+        case GATT_EVENT_CHARACTERISTIC_VALUE_QUERY_RESULT:
+            if(gattCharacteristicReadCallback)
+            {
+                value_handle = little_endian_read_16(packet, 4);
+                value_length = little_endian_read_16(packet, 6);
+                value = &packet[8];
+                gattCharacteristicReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+            }
+            break;
         // Read long characteristic value.
-		case GATT_EVENT_LONG_CHARACTERISTIC_VALUE_QUERY_RESULT:
-			break;
-		// Read characteristic descriptors.
-		case GATT_EVENT_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
-			if(gattCharsDescriptorReadCallback)
-			{
-				value_handle = little_endian_read_16(packet, 4);
-				value_length = little_endian_read_16(packet, 6);
-				value = &packet[8];
-				gattCharsDescriptorReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
-			}
-			break;
-		// Read long characteristic descriptors.
-		case GATT_EVENT_LONG_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
-			break;
-		// Notify update event.
-		case GATT_EVENT_NOTIFICATION:
-			if(gattNotifyUpdateCallback)
-			{
-				value_handle = little_endian_read_16(packet, 4);
-				value_length = little_endian_read_16(packet, 6);
-				value = &packet[8];
-				gattNotifyUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
-			}
-			break;
-		// Indicate update event.
-		case GATT_EVENT_INDICATION:
-			if(gattIndicateUpdateCallback)
-			{
-				value_handle = little_endian_read_16(packet, 4);
-				value_length = little_endian_read_16(packet, 6);
-				value = &packet[8];
-				gattIndicateUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
-			}
-			break;
-		// Event complete.
-		case GATT_EVENT_QUERY_COMPLETE:
-			status = little_endian_read_16(packet, 4);
-			switch(gatt_client_operation)
-			{
-				case GATT_CLIENT_SERVICE_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattServiceDiscoveredCallback)
-						gattServiceDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
-					break;
-				case GATT_CLIENT_CHARACTERISTIC_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-    				if(gattCharsDiscoveredCallback)
-    					gattCharsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
-    				break;
-				case GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorsDiscoveredCallback)
-					    gattCharsDescriptorsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
-					break;
-				case GATT_CLIENT_READ_VALUE_RESULT:
-					//packet:0xa0 0x03 con_handle status.
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharacteristicReadCallback)
-						gattCharacteristicReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
-					break;
-				case GATT_CLIENT_WRITE_VALUE_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharacteristicWrittenCallback)
-						gattCharacteristicWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
-					break;
+        case GATT_EVENT_LONG_CHARACTERISTIC_VALUE_QUERY_RESULT:
+            break;
+        // Read characteristic descriptors.
+        case GATT_EVENT_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
+            if(gattDescriptorReadCallback)
+            {
+                value_handle = little_endian_read_16(packet, 4);
+                value_length = little_endian_read_16(packet, 6);
+                value = &packet[8];
+                gattDescriptorReadCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+            }
+            break;
+        // Read long characteristic descriptors.
+        case GATT_EVENT_LONG_CHARACTERISTIC_DESCRIPTOR_QUERY_RESULT:
+            break;
+        // Notify update event.
+        case GATT_EVENT_NOTIFICATION:
+            if(gattNotifyUpdateCallback)
+            {
+                value_handle = little_endian_read_16(packet, 4);
+                value_length = little_endian_read_16(packet, 6);
+                value = &packet[8];
+                gattNotifyUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+            }
+            break;
+        // Indicate update event.
+        case GATT_EVENT_INDICATION:
+            if(gattIndicateUpdateCallback)
+            {
+                value_handle = little_endian_read_16(packet, 4);
+                value_length = little_endian_read_16(packet, 6);
+                value = &packet[8];
+                gattIndicateUpdateCallback(BLE_STATUS_OK, con_handle, value_handle, value, value_length);
+            }
+            break;
+        // Event complete.
+        case GATT_EVENT_QUERY_COMPLETE:
+            status = little_endian_read_16(packet, 4);
+            switch(gatt_client_operation)
+            {
+                case GATT_CLIENT_SERVICE_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattServiceDiscoveredCallback)
+                        gattServiceDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+                    break;
+                case GATT_CLIENT_CHARACTERISTIC_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattCharsDiscoveredCallback)
+                        gattCharsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+                    break;
+                case GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattDescriptorsDiscoveredCallback)
+                        gattDescriptorsDiscoveredCallback(BLE_STATUS_DONE, con_handle, NULL);
+                    break;
+                case GATT_CLIENT_READ_VALUE_RESULT:
+                    // packet:0xa0 0x03 con_handle status.
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattCharacteristicReadCallback)
+                        gattCharacteristicReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
+                    break;
+                case GATT_CLIENT_WRITE_VALUE_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattCharacteristicWrittenCallback)
+                        gattCharacteristicWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+                    break;
 
-				case GATT_CLIENT_READ_DESCRIPTOR_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorReadCallback)
-						gattCharsDescriptorReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
-					break;
+                case GATT_CLIENT_READ_DESCRIPTOR_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattDescriptorReadCallback)
+                        gattDescriptorReadCallback((status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE), 0xFFFF, 0xFFFF, NULL, 0);
+                    break;
 
-				case GATT_CLIENT_WRITE_DESCRIPTOR_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattCharsDescriptorticWrittenCallback)
-						gattCharsDescriptorticWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
-					break;
+                case GATT_CLIENT_WRITE_DESCRIPTOR_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattDescriptorticWrittenCallback)
+                        gattDescriptorticWrittenCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+                    break;
 
-				case GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT:
-					gatt_client_operation = GATT_CLIENT_IDLE;
-					if(gattWriteClientCharsConfigCallback)
-						gattWriteClientCharsConfigCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
-					break;
+                case GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT:
+                    gatt_client_operation = GATT_CLIENT_IDLE;
+                    if(gattWriteCCCDCallback)
+                        gattWriteCCCDCallback(status ? BLE_STATUS_OTHER_ERROR : BLE_STATUS_DONE, con_handle);
+                    break;
 
-				default:
-					break;
-			}
+                default:
+                    break;
+            }
+            break;
 
-			break;
-
-		default:
-			break;
-	}
+        default:
+            break;
+    }
 }
 
 
@@ -480,19 +468,19 @@ void hal_btstack_init(void)
         wlan_activate();
 
         // reset handler
-        bleAdvertismentCallback                = NULL;
-        bleDeviceConnectedCallback             = NULL;
-        bleDeviceDisconnectedCallback          = NULL;
-        gattServiceDiscoveredCallback          = NULL;
-        gattCharsDiscoveredCallback            = NULL;
-        gattCharsDescriptorsDiscoveredCallback = NULL;
-        gattCharacteristicReadCallback         = NULL;
-        gattCharacteristicWrittenCallback      = NULL;
-        gattCharsDescriptorReadCallback        = NULL;
-        gattCharsDescriptorticWrittenCallback  = NULL;
-        gattWriteClientCharsConfigCallback     = NULL;
-        gattNotifyUpdateCallback               = NULL;
-        gattIndicateUpdateCallback             = NULL;
+        bleAdvertismentCallback           = NULL;
+        bleConnectedCallback              = NULL;
+        bleDisconnectedCallback           = NULL;
+        gattServiceDiscoveredCallback     = NULL;
+        gattCharsDiscoveredCallback       = NULL;
+        gattDescriptorsDiscoveredCallback = NULL;
+        gattCharacteristicReadCallback    = NULL;
+        gattCharacteristicWrittenCallback = NULL;
+        gattDescriptorReadCallback        = NULL;
+        gattDescriptorticWrittenCallback  = NULL;
+        gattWriteCCCDCallback             = NULL;
+        gattNotifyUpdateCallback          = NULL;
+        gattIndicateUpdateCallback        = NULL;
 
         att_db_util_init();
 
@@ -539,6 +527,7 @@ void hal_btstack_init(void)
         hal_btstack_thread_quit = 0;
         wiced_rtos_create_thread(&hal_btstack_thread_, WICED_APPLICATION_PRIORITY, "BLE provision", hal_stack_thread, 1024*3, NULL);
         hci_init_flag = 1;
+        connect_handle = 0xFFFF;
     }
 }
 
@@ -546,7 +535,7 @@ void hal_btstack_deInit(void)
 {
     if(hci_init_flag)
     {
-    	hci_init_flag = 0;
+        hci_init_flag = 0;
         have_custom_addr = false;
         hci_close();
         btstack_run_loop_deInit();
@@ -561,14 +550,14 @@ void hal_btstack_loop_execute(void)
 {
     if(hci_init_flag)
     {
-        if(notify_queneUsedSize() && att_server_can_send_packet_now())
+        if(notify_queneUsedSize() && att_server_can_send_packet_now(connect_handle))
         {
             hal_notifyData_t data;
             notify_queneRead(&data);
             if((data.data_flag_len & 0x80) == 0x00)
-                att_server_notify(data.handle, data.data, data.data_flag_len&0x7F);
+                att_server_notify(connect_handle, data.handle, data.data, data.data_flag_len&0x7F);
             else
-                att_server_indicate(data.handle, data.data, data.data_flag_len&0x7F);
+                att_server_indicate(connect_handle, data.handle, data.data, data.data_flag_len&0x7F);
         }
         btstack_run_loop_execute();
     }
@@ -586,9 +575,9 @@ void hal_btstack_setTimer(btstack_timer_source_t *ts, uint32_t timeout_in_ms)
     btstack_run_loop_set_timer(ts, timeout_in_ms);
 }
 
-void hal_btstack_setTimerHandler(btstack_timer_source_t *ts, void (*process)(btstack_timer_source_t *_ts))
+void hal_btstack_setTimerHandler(btstack_timer_source_t *ts, btstack_timer_handler_t handler)
 {
-    btstack_run_loop_set_timer_handler(ts, process);
+    btstack_run_loop_set_timer_handler(ts, handler);
 }
 
 void hal_btstack_addTimer(btstack_timer_source_t *timer)
@@ -637,7 +626,19 @@ void hal_btstack_setRandomAddressMode(gap_random_address_type_t random_address_t
 }
 
 /**
+ * @brief Sets update period for random address
+ *
+ * @param period_ms
+ */
+void hal_btstack_setUpdatePeriodForRamdomAddr(int period_ms)
+{
+    gap_random_address_set_update_period(period_ms);
+}
+
+/**
  * @brief Set random address.
+ *
+ * @note Sets random address mode to type off
  *
  * @param[in]  addr
  */
@@ -658,6 +659,27 @@ void hal_btstack_setPublicBdAddr(bd_addr_t addr)
 }
 
 /**
+ * @brief Get local bd address.
+ *
+ * @param[out]  local_bd_addr
+ */
+void hal_btstack_getLocalBdAddr(bd_addr_t address_buffer)
+{
+    gap_local_bd_addr(address_buffer);
+}
+
+/**
+ * @brief Get the address at advertisement when advertising.
+ *
+ * @param[out]  addr_type
+ * @param[out]  addr
+ */
+void hal_btstack_getAddrOfAdvertisement(uint8_t *addr_type, bd_addr_t addr)
+{
+    gap_advertisements_get_address(addr_type, addr);
+}
+
+/**
  * @brief Set local name.
  *
  * @note has to be done before stack starts up
@@ -670,15 +692,27 @@ void hal_btstack_setLocalName(const char *local_name)
 }
 
 /**
- * @brief Set advertising data.
+ * @brief Set advertisement data.
  *
  * @param[in]  size  The size of advertising data, no more than 31bytes.
  * @param[in]  data  Advertising data.
  *
  */
-void hal_btstack_setAdvData(uint16_t size, uint8_t *data)
+void hal_btstack_setAdvertisementData(uint16_t size, uint8_t *data)
 {
     gap_advertisements_set_data(size, data);
+}
+
+/**
+ * @brief Set scan respons data.
+ *
+ * @param[in]  size  The size of scanResponse data, no more than 31bytes.
+ * @param[in]  data  The buffer pointer of scanResponse data.
+ *
+ */
+void hal_btstack_setScanResponseData(uint16_t size, uint8_t *data)
+{
+    gap_scan_response_set_data(size, data);
 }
 
 /**
@@ -695,7 +729,7 @@ void hal_btstack_setAdvData(uint16_t size, uint8_t *data)
  * @param[in]  filter_policy
  *
  */
-void hal_btstack_setAdvParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
+void hal_btstack_setAdvertisementParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy)
 {
     gap_advertisements_set_params(adv_int_min,adv_int_max,adv_type,dir_addr_type,dir_addr,channel_map,filter_policy);
 }
@@ -719,17 +753,17 @@ void hal_btstack_stopAdvertising(void)
 /**
  * @brief Set connected Callback.
  */
-void hal_btstack_setConnectedCallback(void (*callback)(BLEStatus_t status, uint16_t handle))
+void hal_btstack_setConnectedCallback(bleConnectedCallback_t cb)
 {
-    bleDeviceConnectedCallback = callback;
+    bleConnectedCallback = cb;
 }
 
 /**
  * @brief Set disconnected Callback.
  */
-void hal_btstack_setDisconnectedCallback(void (*callback)(uint16_t handle))
+void hal_btstack_setDisconnectedCallback(bleDisconnectedCallback_t cb)
 {
-    bleDeviceDisconnectedCallback = callback;
+    bleDisconnectedCallback = cb;
 }
 
 /**
@@ -767,7 +801,8 @@ uint8_t hal_btstack_connect(bd_addr_t addr, bd_addr_type_t type)
  */
 void hal_btstack_setConnParamsRange(le_connection_parameter_range_t range)
 {
-	gap_set_connection_parameter_range(range);
+    le_connection_parameter_range_t temp_range = range;
+    gap_set_connection_parameter_range(&temp_range);
 }
 
 /**
@@ -791,13 +826,13 @@ void hal_btstack_stopScanning(void)
  */
 void hal_btstack_setScanParams(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window)
 {
-	gap_set_scan_parameters(scan_type, scan_interval, scan_window);
+    gap_set_scan_parameters(scan_type, scan_interval, scan_window);
 }
 
 /**
  * @brief Set advertisement report callback for scanning device.
  */
-void hal_btstack_setBLEAdvertisementCallback(void (*cb)(advertisementReport_t *advertisement_report))
+void hal_btstack_setBLEAdvertisementCallback(bleAdvertismentCallback_t cb)
 {
     bleAdvertismentCallback = cb;
 }
@@ -867,7 +902,7 @@ int hal_btstack_attServerSendIndicate(uint16_t value_handle, uint8_t *value, uin
  *
  * @param[in]  cb
  */
-void hal_btstack_setGattCharsRead(uint16_t (*cb)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size))
+void hal_btstack_setGattCharsRead(gattReadCallback_t cb)
 {
     gattReadCallback = cb;
 }
@@ -877,7 +912,7 @@ void hal_btstack_setGattCharsRead(uint16_t (*cb)(uint16_t handle, uint8_t *buffe
  *
  * @param[in]  cb
  */
-void hal_btstack_setGattCharsWrite(int (*cb)(uint16_t handle, uint8_t *buffer, uint16_t buffer_size))
+void hal_btstack_setGattCharsWrite(gattWriteCallback_t cb)
 {
     gattWriteCallback = cb;
 }
@@ -944,78 +979,78 @@ uint16_t hal_btstack_addCharsDynamicUUID128bits(uint8_t *uuid, uint16_t flags, u
 /**
  * @brief Register callback for discovering service.
  */
-void hal_btstack_setGattServiceDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_service_t *service))
+void hal_btstack_setGattServiceDiscoveredCallback(gattServicesDiscoveredCallback_t cb)
 {
-	gattServiceDiscoveredCallback = cb;
+    gattServiceDiscoveredCallback = cb;
 }
 
 /**
  * @brief Register callback for discovering characteristic.
  */
-void hal_btstack_setGattCharsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_t *characteristic))
+void hal_btstack_setGattCharsDiscoveredCallback(gattCharsDiscoveredCallback_t cb)
 {
-	gattCharsDiscoveredCallback = cb;
+    gattCharsDiscoveredCallback = cb;
 }
 
 /**
  * @brief Register callback for discovering descriptors of characteristic.
  */
-void hal_btstack_setGattCharsDescriptorsDiscoveredCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, gatt_client_characteristic_descriptor_t *characteristic))
+void hal_btstack_setGattDescriptorsDiscoveredCallback(gattDescriptorsDiscoveredCallback_t cb)
 {
-	gattCharsDescriptorsDiscoveredCallback = cb;
+    gattDescriptorsDiscoveredCallback = cb;
 }
 
 /**
  * @brief Register callback for reading characteristic value.
  */
-void hal_btstack_setGattCharacteristicReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattCharacteristicReadCallback(gattCharacteristicReadCallback_t cb)
 {
-	gattCharacteristicReadCallback = cb;
+    gattCharacteristicReadCallback = cb;
 }
 
 /**
  * @brief Register callback for writing characteristic value.
  */
-void hal_btstack_setGattCharacteristicWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattCharacteristicWrittenCallback(gattCharacteristicWrittenCallback_t cb)
 {
-	gattCharacteristicWrittenCallback = cb;
+    gattCharacteristicWrittenCallback = cb;
 }
 
 /**
  * @brief Register callback for reading characteristic descriptor value.
  */
-void hal_btstack_setGattCharsDescriptorReadCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattDescriptorReadCallback(gattDescriptorReadCallback_t cb)
 {
-	gattCharsDescriptorReadCallback = cb;
+    gattDescriptorReadCallback = cb;
 }
 
 /**
  * @brief Register callback for writing characteristic descriptor value.
  */
-void hal_btstack_setGattCharsDescriptorWrittenCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattDescriptorWrittenCallback(gattDescriptorWrittenCallback_t cb)
 {
-	gattCharsDescriptorticWrittenCallback = cb;
+    gattDescriptorticWrittenCallback = cb;
 }
 
 /**
  * @brief Register callback for enable/disable CCCD.
  */
-void hal_btstack_setGattWriteClientCharacteristicConfigCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle))
+void hal_btstack_setGattWriteCCCDCallback(gattWriteCCCDCallback_t cb)
 {
-	gattWriteClientCharsConfigCallback = cb;
+    gattWriteCCCDCallback = cb;
 }
 
 /**
  * @brief Register callback for value update.
  */
-void hal_btstack_setGattNotifyUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattNotifyUpdateCallback(gattNotifyUpdateCallback_t cb)
 {
-	gattNotifyUpdateCallback = cb;
+    gattNotifyUpdateCallback = cb;
 }
 
-void hal_btstack_setGattIndicateUpdateCallback(void (*cb)(BLEStatus_t status, uint16_t con_handle, uint16_t value_handle, uint8_t * value, uint16_t length))
+void hal_btstack_setGattIndicateUpdateCallback(gattIndicateUpdateCallback_t cb)
 {
-	gattIndicateUpdateCallback = cb;
+    gattIndicateUpdateCallback = cb;
 }
 
 
@@ -1032,20 +1067,20 @@ void hal_btstack_setGattIndicateUpdateCallback(void (*cb)(BLEStatus_t status, ui
  */
 uint8_t hal_btstack_discoverPrimaryServices(uint16_t con_handle)
 {
-	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
+    gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
     return gatt_client_discover_primary_services(handle_gatt_client_event, con_handle);
 }
 
 uint8_t hal_btstack_discoverPrimaryServicesByUUID16(uint16_t con_handle, uint16_t uuid16)
 {
-	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
-	return gatt_client_discover_primary_services_by_uuid16(handle_gatt_client_event, con_handle, uuid16);
+    gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
+    return gatt_client_discover_primary_services_by_uuid16(handle_gatt_client_event, con_handle, uuid16);
 }
 
 uint8_t hal_btstack_discoverPrimaryServicesByUUID128(uint16_t con_handle, const uint8_t * uuid)
 {
-	gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
-	return gatt_client_discover_primary_services_by_uuid128(handle_gatt_client_event, con_handle, uuid);
+    gatt_client_operation = GATT_CLIENT_SERVICE_RESULT;
+    return gatt_client_discover_primary_services_by_uuid128(handle_gatt_client_event, con_handle, uuid);
 }
 
 /**
@@ -1062,32 +1097,32 @@ uint8_t hal_btstack_discoverPrimaryServicesByUUID128(uint16_t con_handle, const 
  */
 uint8_t hal_btstack_discoverCharsForService(uint16_t con_handle, gatt_client_service_t  *service)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
-	return gatt_client_discover_characteristics_for_service(handle_gatt_client_event, con_handle, service);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
+    return gatt_client_discover_characteristics_for_service(handle_gatt_client_event, con_handle, service);
 }
 
 uint8_t hal_btstack_discoverCharsForHandleRangeByUUID16(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint16_t uuid16)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
-	return gatt_client_discover_characteristics_for_handle_range_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
+    return gatt_client_discover_characteristics_for_handle_range_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
 }
 
 uint8_t hal_btstack_discoverCharsForHandleRangeByUUID128(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint8_t  * uuid)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
-	return gatt_client_discover_characteristics_for_handle_range_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
+    return gatt_client_discover_characteristics_for_handle_range_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid);
 }
 
 uint8_t hal_btstack_discoverCharsForServiceByUUID16(uint16_t con_handle, gatt_client_service_t  *service, uint16_t  uuid16)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
-	return gatt_client_discover_characteristics_for_service_by_uuid16 (handle_gatt_client_event, con_handle, service, uuid16);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
+    return gatt_client_discover_characteristics_for_service_by_uuid16 (handle_gatt_client_event, con_handle, service, uuid16);
 }
 
 uint8_t hal_btstack_discoverCharsForServiceByUUID128(uint16_t con_handle, gatt_client_service_t  *service, uint8_t  * uuid128)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
-	return gatt_client_discover_characteristics_for_service_by_uuid128(handle_gatt_client_event, con_handle, service, uuid128);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_RESULT;
+    return gatt_client_discover_characteristics_for_service_by_uuid128(handle_gatt_client_event, con_handle, service, uuid128);
 }
 
 /**
@@ -1104,8 +1139,8 @@ uint8_t hal_btstack_discoverCharsForServiceByUUID128(uint16_t con_handle, gatt_c
  */
 uint8_t hal_btstack_discoverCharsDescriptors(uint16_t con_handle, gatt_client_characteristic_t  *characteristic)
 {
-	gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT;
-	return gatt_client_discover_characteristic_descriptors(handle_gatt_client_event, con_handle, characteristic);
+    gatt_client_operation = GATT_CLIENT_CHARACTERISTIC_DESICIPTORS_RESULT;
+    return gatt_client_discover_characteristic_descriptors(handle_gatt_client_event, con_handle, characteristic);
 }
 
 /**
@@ -1122,53 +1157,53 @@ uint8_t hal_btstack_discoverCharsDescriptors(uint16_t con_handle, gatt_client_ch
  */
 uint8_t hal_btstack_readValueOfCharacteristic(uint16_t con_handle, gatt_client_characteristic_t  *characteristic)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
 }
 
 uint8_t hal_btstack_readValueOfCharacteristicUsingValueHandle(uint16_t con_handle, uint16_t characteristic_value_handle)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
 }
 
 uint8_t hal_btstack_readValueOfCharacteristicByUUID16(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint16_t uuid16)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_value_of_characteristics_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_value_of_characteristics_by_uuid16(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid16);
 }
 
 uint8_t hal_btstack_readValueOfCharacteristicByUUID128(uint16_t con_handle, uint16_t start_handle, uint16_t end_handle, uint8_t *uuid128)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_value_of_characteristics_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid128);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_value_of_characteristics_by_uuid128(handle_gatt_client_event, con_handle, start_handle, end_handle, uuid128);
 }
 
 uint8_t hal_btstack_readLongValueOfCharacteristic(uint16_t con_handle, gatt_client_characteristic_t *characteristic)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic);
 }
 
 uint8_t hal_btstack_readLongValueOfCharacteristicUsingValueHandle(uint16_t con_handle, uint16_t characteristic_value_handle)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_long_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_long_value_of_characteristic_using_value_handle(handle_gatt_client_event, con_handle, characteristic_value_handle);
 }
 
 uint8_t hal_btstack_readLongValueOfCharacteristicUsingValueHandleWithOffset(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t offset)
 {
-	gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
-	return gatt_client_read_long_value_of_characteristic_using_value_handle_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset);
+    gatt_client_operation = GATT_CLIENT_READ_VALUE_RESULT;
+    return gatt_client_read_long_value_of_characteristic_using_value_handle_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset);
 }
 
 /**
  * @brief Writes the characteristic value using the characteristic's value handle without an acknowledgment that the write was successfully performed.
  */
-uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t  * data)
+uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t  *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
-	return gatt_client_write_value_of_characteristic_without_response(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+    return gatt_client_write_value_of_characteristic_without_response(con_handle, characteristic_value_handle, length, data);
 }
 
 /**
@@ -1187,20 +1222,20 @@ uint8_t hal_btstack_writeValueOfChracteristicWithoutResponse(uint16_t con_handle
  */
 uint8_t hal_btstack_writeValueOfCharacteristic(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
-	return gatt_client_write_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+    return gatt_client_write_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
 }
 
 uint8_t hal_btstack_writeLongValueOfCharacteristic(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
-	return gatt_client_write_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+    return gatt_client_write_long_value_of_characteristic(handle_gatt_client_event, con_handle, characteristic_value_handle, length, data);
 }
 
 uint8_t hal_btstack_writeLongValueOfCharacteristicWithOffset(uint16_t con_handle, uint16_t characteristic_value_handle, uint16_t offset, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
-	return gatt_client_write_long_value_of_characteristic_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_VALUE_RESULT;
+    return gatt_client_write_long_value_of_characteristic_with_offset(handle_gatt_client_event, con_handle, characteristic_value_handle, offset, length, data);
 }
 
 /**
@@ -1217,32 +1252,32 @@ uint8_t hal_btstack_writeLongValueOfCharacteristicWithOffset(uint16_t con_handle
  */
 uint8_t hal_btstack_readCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor)
 {
-	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
-	return gatt_client_read_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
+    gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+    return gatt_client_read_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
 }
 
 uint8_t hal_btstack_readCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle)
 {
-	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
-	return gatt_client_read_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
+    gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+    return gatt_client_read_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
 }
 
 uint8_t hal_btstack_readLongCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor)
 {
-	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
-	return gatt_client_read_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
+    gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+    return gatt_client_read_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor);
 }
 
 uint8_t hal_btstack_readLongCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle)
 {
-	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
-	return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
+    gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+    return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle);
 }
 
 uint8_t hal_btstack_readLongCharacteristicDescriptorUsingDescriptorHandleWithOffset(uint16_t con_handle, uint16_t descriptor_handle, uint16_t offset)
 {
-	gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
-	return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset);
+    gatt_client_operation = GATT_CLIENT_READ_DESCRIPTOR_RESULT;
+    return gatt_client_read_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset);
 }
 
 /**
@@ -1259,32 +1294,32 @@ uint8_t hal_btstack_readLongCharacteristicDescriptorUsingDescriptorHandleWithOff
  */
 uint8_t hal_btstack_writeCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
-	return gatt_client_write_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+    return gatt_client_write_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
 }
 
 uint8_t hal_btstack_writeCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
-	return gatt_client_write_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+    return gatt_client_write_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
 }
 
 uint8_t hal_btstack_writeLongCharacteristicDescriptor(uint16_t con_handle, gatt_client_characteristic_descriptor_t *descriptor, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
-	return gatt_client_write_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+    return gatt_client_write_long_characteristic_descriptor(handle_gatt_client_event, con_handle, descriptor, length, data);
 }
 
 uint8_t hal_btstack_writeLongCharacteristicDescriptorUsingDescriptorHandle(uint16_t con_handle, uint16_t descriptor_handle, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
-	return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+    return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle(handle_gatt_client_event, con_handle, descriptor_handle, length, data);
 }
 
 uint8_t hal_btstack_writeLongCharacteristicDescriptorUsingDescriptorHandleWithOffset(uint16_t con_handle, uint16_t descriptor_handle, uint16_t offset, uint16_t length, uint8_t *data)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
-	return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset, length, data);
+    gatt_client_operation = GATT_CLIENT_WRITE_DESCRIPTOR_RESULT;
+    return gatt_client_write_long_characteristic_descriptor_using_descriptor_handle_with_offset(handle_gatt_client_event, con_handle, descriptor_handle, offset, length, data);
 }
 
 /**
@@ -1292,27 +1327,27 @@ uint8_t hal_btstack_writeLongCharacteristicDescriptorUsingDescriptorHandleWithOf
  */
 uint8_t hal_btstack_WriteClientCharacteristicConfiguration(uint16_t con_handle, gatt_client_characteristic_t * characteristic, uint16_t configuration)
 {
-	gatt_client_operation = GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT;
-	if(configuration == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NONE)
-	{
-		client_notification_remove(con_handle, characteristic);
-		return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
-	}
-	else
-	{
-		uint8_t ret = client_notification_add(handle_gatt_client_event, con_handle, characteristic);
-		if(ret == 0)
-			return BTSTACK_MEMORY_ALLOC_FAILED;
-		else if(ret == 1)
-			return 0;
-		else
-			return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
-	}
+    gatt_client_operation = GATT_CLIENT_WRITE_CLIENT_CHARS_CONFIG_RESULT;
+    if(configuration == GATT_CLIENT_CHARACTERISTICS_CONFIGURATION_NONE)
+    {
+        client_notification_remove(con_handle, characteristic);
+        return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
+    }
+    else
+    {
+        uint8_t ret = client_notification_add(handle_gatt_client_event, con_handle, characteristic);
+        if(ret == 0)
+            return BTSTACK_MEMORY_ALLOC_FAILED;
+        else if(ret == 1)
+            return 0;
+        else
+            return gatt_client_write_client_characteristic_configuration(handle_gatt_client_event, con_handle, characteristic, configuration);
+    }
 }
 
 void hal_btstack_listenForCharacteristicValueUpdates(gatt_client_notification_t *notification, uint16_t con_handle, gatt_client_characteristic_t *characteristic)
 {
-	gatt_client_listen_for_characteristic_value_updates(notification, con_handle, characteristic);
+    gatt_client_listen_for_characteristic_value_updates(notification, handle_gatt_client_event, con_handle, characteristic);
 }
 
 
@@ -1327,7 +1362,7 @@ void hal_btstack_listenForCharacteristicValueUpdates(gatt_client_notification_t 
  */
 static uint8_t notify_queueFreeSize(void)
 {
-    return ( MAX_NO_NOTIFY_DATA_QUEUE - 1 - ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE));
+    return ( MAX_NR_NOTIFY_DATA_QUEUE - 1 - ((MAX_NR_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NR_NOTIFY_DATA_QUEUE));
 }
 
 /**
@@ -1338,7 +1373,7 @@ static uint8_t notify_queueFreeSize(void)
  */
 static uint8_t notify_queneUsedSize(void)
 {
-    return ((MAX_NO_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NO_NOTIFY_DATA_QUEUE);
+    return ((MAX_NR_NOTIFY_DATA_QUEUE + notify_queue.head - notify_queue.tail) % MAX_NR_NOTIFY_DATA_QUEUE);
 }
 
 /**
@@ -1353,7 +1388,7 @@ static uint8_t notify_queneWrite(hal_notifyData_t *dat)
         return 0;
 
     notify_queue.queue[notify_queue.head] = *dat;
-    notify_queue.head = (notify_queue.head + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    notify_queue.head = (notify_queue.head + 1) % MAX_NR_NOTIFY_DATA_QUEUE;
 
     return 1;
 }
@@ -1370,7 +1405,7 @@ static uint8_t notify_queneRead(hal_notifyData_t *dat)
         return 0;
 
     *dat = notify_queue.queue[notify_queue.tail];
-    notify_queue.tail = (notify_queue.tail + 1) % MAX_NO_NOTIFY_DATA_QUEUE;
+    notify_queue.tail = (notify_queue.tail + 1) % MAX_NR_NOTIFY_DATA_QUEUE;
 
     return 1;
 }
@@ -1380,7 +1415,7 @@ static uint8_t notify_queneRead(hal_notifyData_t *dat)
  */
 static void client_notification_init(void)
 {
-	memset(client_notify_queue, 0x00, sizeof(client_notify_queue));
+    memset(client_notify_queue, 0x00, sizeof(client_notify_queue));
 }
 
 /**
@@ -1392,30 +1427,30 @@ static void client_notification_init(void)
  */
 static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16_t con_handle, gatt_client_characteristic_t *characteristic)
 {
-	uint8_t index = 0;
+    uint8_t index = 0;
 
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
-		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
-		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle) {
-			// Exist
-			log_info("client notify exist.");
-			return 1;
-		}
-	}
+    for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
+        if(client_notify_queue[index].client_notify.con_handle == con_handle &&
+           client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle) {
+            // Exist
+            log_info("client notify exist.");
+            return 1;
+        }
+    }
     // Get a available index.
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
-		if(client_notify_queue[index].used_flag == 0)
-			break;
-	}
-	if(index >= MAX_NO_CLIENT_NOTIFY_QUEUE)
-		return 0;
+    for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
+        if(client_notify_queue[index].used_flag == 0)
+            break;
+    }
+    if(index >= MAX_NR_CLIENT_NOTIFY_QUEUE)
+        return 0;
 
-	client_notify_queue[index].client_notify.callback = callback;
-	client_notify_queue[index].used_flag = 1;
-	log_info("client notify listen.");
-	gatt_client_listen_for_characteristic_value_updates(&client_notify_queue[index].client_notify, con_handle, characteristic);
+    client_notify_queue[index].client_notify.callback = callback;
+    client_notify_queue[index].used_flag = 1;
+    log_info("client notify listen.");
+    gatt_client_listen_for_characteristic_value_updates(&client_notify_queue[index].client_notify, handle_gatt_client_event, con_handle, characteristic);
 
-	return 2;
+    return 2;
 }
 
 /**
@@ -1426,19 +1461,19 @@ static uint8_t client_notification_add(btstack_packet_handler_t callback, uint16
  */
 static void client_notification_remove(uint16_t con_handle, gatt_client_characteristic_t *characteristic)
 {
-	uint8_t index = 0;
+    uint8_t index = 0;
 
-	for(index=0; index<MAX_NO_CLIENT_NOTIFY_QUEUE; index++) {
-		if(client_notify_queue[index].client_notify.con_handle == con_handle &&
-		   client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle)
-		{
-			log_info("client notify clean.");
-			client_notify_queue[index].client_notify.con_handle = 0;
-			client_notify_queue[index].client_notify.attribute_handle = 0;
-			client_notify_queue[index].client_notify.callback = NULL;
-			client_notify_queue[index].used_flag = 0;
-		}
-	}
+    for(index=0; index<MAX_NR_CLIENT_NOTIFY_QUEUE; index++) {
+        if(client_notify_queue[index].client_notify.con_handle == con_handle &&
+           client_notify_queue[index].client_notify.attribute_handle == characteristic->value_handle)
+        {
+            log_info("client notify clean.");
+            client_notify_queue[index].client_notify.con_handle = 0;
+            client_notify_queue[index].client_notify.attribute_handle = 0;
+            client_notify_queue[index].client_notify.callback = NULL;
+            client_notify_queue[index].used_flag = 0;
+        }
+    }
 }
 
 

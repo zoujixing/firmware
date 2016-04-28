@@ -35,61 +35,65 @@
  *
  */
 
-// *****************************************************************************
-//
-//  GSM model 
-//
-// *****************************************************************************
+/*
+ *  btstack_slip.h
+ *  SLIP encoder/decoder
+ */
 
+#ifndef __BTSTACK_SLIP_H
+#define __BTSTACK_SLIP_H
 
-#ifndef BTSTACK_HFP_GSM_MODEL_H
-#define BTSTACK_HFP_GSM_MODEL_H
-
-#include "hci.h"
-#include "sdp_client_rfcomm.h"
-#include "hfp.h"
+#include <stdint.h>
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-/* API_START */
-typedef struct {
-    uint8_t used_slot;
-    hfp_enhanced_call_status_t enhanced_status;
-    hfp_enhanced_call_dir_t direction;
-    hfp_enhanced_call_mode_t mode;
-    hfp_enhanced_call_mpty_t mpty;
-    // TODO: sort on drop call, so that index corresponds to table index
-    int index;
-    uint8_t clip_type;
-    char    clip_number[25];
-} hfp_gsm_call_t;
+#define BTSTACK_SLIP_SOF 0xc0
 
-hfp_callheld_status_t hfp_gsm_callheld_status(void);
-hfp_call_status_t hfp_gsm_call_status(void);
-hfp_callsetup_status_t hfp_gsm_callsetup_status(void);
+// ENCODER
 
-int hfp_gsm_get_number_of_calls(void);
-char * hfp_gsm_last_dialed_number(void);
-void hfp_gsm_clear_last_dialed_number(void);
+/**
+ * @brief Initialise SLIP encoder with data
+ * @param data
+ * @param len
+ */
+void btstack_slip_encoder_start(const uint8_t * data, uint16_t len);
 
+/**
+ * @brief Check if encoder has data ready
+ * @return True if data ready
+ */
+int  btstack_slip_encoder_has_data(void);
 
-hfp_gsm_call_t * hfp_gsm_call(int index);
+/** 
+ * @brief Get next byte from encoder 
+ * @return Next bytes from encoder
+ */
+uint8_t btstack_slip_encoder_get_byte(void);
 
-int hfp_gsm_call_possible(void);
+// DECODER
 
-uint8_t hfp_gsm_clip_type(void);
-char *  hfp_gsm_clip_number(void);
+/**
+ * @brief Initialise SLIP decoder with buffer
+ * @param buffer to store received data
+ * @param max_size of buffer
+ */
+void btstack_slip_decoder_init(uint8_t * buffer, uint16_t max_size);
 
-void hfp_gsm_init(void);
+/**
+ * @brief Process received byte
+ * @param input
+ */
 
-void hfp_gsm_handle_event_with_clip(hfp_ag_call_event_t event, uint8_t type, const char * number);
-void hfp_gsm_handle_event_with_call_index(hfp_ag_call_event_t event, uint8_t index);
-void hfp_gsm_handle_event_with_call_number(hfp_ag_call_event_t event, const char * number);
-void hfp_gsm_handle_event(hfp_ag_call_event_t event);
+void btstack_slip_decoder_process(uint8_t input);
 
-/* API_END */
+/**
+ * @brief Get size of decoded frame
+ * @return size of frame. Size = 0 => frame not complete
+ */
+
+uint16_t btstack_slip_decoder_frame_size(void);
 
 #if defined __cplusplus
 }

@@ -48,21 +48,20 @@
 
 #include "btstack_config.h"
 
+#include "att_dispatch.h"
+#include "ble/att_db.h"
+#include "ble/att_server.h"
+#include "ble/core.h"
+#include "ble/le_device_db.h"
+#include "ble/sm.h"
 #include "btstack_debug.h"
 #include "btstack_event.h"
 #include "btstack_memory.h"
 #include "btstack_run_loop.h"
+#include "gap.h"
 #include "hci.h"
 #include "hci_dump.h"
 #include "l2cap.h"
-
-#include "ble/sm.h"
-#include "ble/att_db.h"
-#include "att_dispatch.h"
-#include "gap.h"
-#include "ble/le_device_db.h"
-
-#include "ble/att_server.h"
 
 static void att_run(void);
 
@@ -83,6 +82,7 @@ static att_server_state_t att_server_state;
 
 static uint8_t   att_client_addr_type;
 static bd_addr_t att_client_address;
+static uint8_t   att_client_waiting_for_can_send;
 static uint16_t  att_request_size   = 0;
 static uint8_t   att_request_buffer[ATT_REQUEST_BUFFER_SIZE];
 
@@ -96,7 +96,6 @@ static btstack_packet_callback_registration_t sm_event_callback_registration;
 static btstack_packet_handler_t att_client_packet_handler = NULL;
 
 static void att_handle_value_indication_notify_client(uint8_t status, uint16_t client_handle, uint16_t attribute_handle){
-    
     if (!att_client_packet_handler) return;
     
     uint8_t event[7];
@@ -112,7 +111,6 @@ static void att_handle_value_indication_notify_client(uint8_t status, uint16_t c
 }
 
 static void att_emit_mtu_event(hci_con_handle_t con_handle, uint16_t mtu){
-
     if (!att_client_packet_handler) return;
 
     uint8_t event[6];
@@ -123,6 +121,13 @@ static void att_emit_mtu_event(hci_con_handle_t con_handle, uint16_t mtu){
     pos += 2;
     little_endian_store_16(event, pos, mtu);
     pos += 2;
+    (*att_client_packet_handler)(HCI_EVENT_PACKET, 0, &event[0], sizeof(event));
+}
+
+static void att_emit_can_send_now_event(void){
+    if (!att_client_packet_handler) return;
+
+    uint8_t event[] = { ATT_EVENT_CAN_SEND_NOW, 0};
     (*att_client_packet_handler)(HCI_EVENT_PACKET, 0, &event[0], sizeof(event));
 }
 
@@ -139,10 +144,6 @@ static void att_event_packet_handler (uint8_t packet_type, uint16_t channel, uin
         case HCI_EVENT_PACKET:
             switch (hci_event_packet_get_type(packet)) {
                 
-                case L2CAP_EVENT_CAN_SEND_NOW:
-                    att_run();
-                    break;
-                    
                 case HCI_EVENT_LE_META:
                     switch (packet[2]) {
                         case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
@@ -204,7 +205,7 @@ static void att_event_packet_handler (uint8_t packet_type, uint16_t channel, uin
                     reverse_bd_addr(&packet[5], event_address);
                     if (memcmp(event_address, att_client_address, 6) != 0) break;
                     att_connection.authorized = packet[11];
-                    att_run();
+                    att_dispatch_server_request_can_send_now_event(att_connection.con_handle);
                 	break;
                 }
                 default:
@@ -233,21 +234,66 @@ static void att_signed_write_handle_cmac_result(uint8_t hash[8]){
     uint32_t counter_packet = little_endian_read_32(att_request_buffer, att_request_size-12);
     le_device_db_remote_counter_set(att_ir_le_device_db_index, counter_packet+1);
     att_server_state = ATT_SERVER_REQUEST_RECEIVED_AND_VALIDATED;
-    att_run();
+    att_dispatch_server_request_can_send_now_event(att_connection.con_handle);
+}
+
+#if 0
+static int att_server_ready_to_send(att_connection_t * connection){
+}
+#endif
+
+// pre: att_server_state == ATT_SERVER_REQUEST_RECEIVED_AND_VALIDATED
+// pre: can send now
+// returns: 1 if packet was sent
+static int att_server_process_validated_request(hci_con_handle_t con_handle){
+
+    l2cap_reserve_packet_buffer();
+    uint8_t * att_response_buffer = l2cap_get_outgoing_buffer();
+    uint16_t  att_response_size   = att_handle_request(&att_connection, att_request_buffer, att_request_size, att_response_buffer);
+
+    // intercept "insufficient authorization" for authenticated connections to allow for user authorization
+    if ((att_response_size     >= 4)
+    && (att_response_buffer[0] == ATT_ERROR_RESPONSE)
+    && (att_response_buffer[4] == ATT_ERROR_INSUFFICIENT_AUTHORIZATION)
+    && (att_connection.authenticated)){
+
+        switch (sm_authorization_state(att_connection.con_handle)){
+            case AUTHORIZATION_UNKNOWN:
+                l2cap_release_packet_buffer();
+                sm_request_pairing(att_connection.con_handle);
+                return 0;
+            case AUTHORIZATION_PENDING:
+                l2cap_release_packet_buffer();
+                return 0;
+            default:
+                break;
+        }
+    }
+
+    att_server_state = ATT_SERVER_IDLE;
+    if (att_response_size == 0) {
+        l2cap_release_packet_buffer();
+        return 0;
+    }
+
+    l2cap_send_prepared_connectionless(att_connection.con_handle, L2CAP_CID_ATTRIBUTE_PROTOCOL, att_response_size);
+
+    // notify client about MTU exchange result
+    if (att_response_buffer[0] == ATT_EXCHANGE_MTU_RESPONSE){
+        att_emit_mtu_event(att_connection.con_handle, att_connection.mtu);
+    }
+    return 1;
 }
 
 static void att_run(void){
     switch (att_server_state){
-        case ATT_SERVER_IDLE:
-        case ATT_SERVER_W4_SIGNED_WRITE_VALIDATION:
-            return;
         case ATT_SERVER_REQUEST_RECEIVED:
             if (att_request_buffer[0] == ATT_SIGNED_WRITE_COMMAND){
                 log_info("ATT Signed Write!");
                 if (!sm_cmac_ready()) {
                     log_info("ATT Signed Write, sm_cmac engine not ready. Abort");
                     att_server_state = ATT_SERVER_IDLE;
-                     return;
+                    return;
                 }  
                 if (att_request_size < (3 + 12)) {
                     log_info("ATT Signed Write, request to short. Abort.");
@@ -283,56 +329,42 @@ static void att_run(void){
                 sm_cmac_start(csrk, att_request_buffer[0], attribute_handle, att_request_size - 15, &att_request_buffer[3], counter_packet, att_signed_write_handle_cmac_result);
                 return;
             } 
-            // NOTE: fall through for regular commands
 
-        case ATT_SERVER_REQUEST_RECEIVED_AND_VALIDATED:
-            if (!att_dispatch_server_can_send_now(att_connection.con_handle)) return;
-
-            l2cap_reserve_packet_buffer();
-            uint8_t * att_response_buffer = l2cap_get_outgoing_buffer();
-            uint16_t  att_response_size   = att_handle_request(&att_connection, att_request_buffer, att_request_size, att_response_buffer);
-
-            // intercept "insufficient authorization" for authenticated connections to allow for user authorization
-            if ((att_response_size     >= 4)
-            && (att_response_buffer[0] == ATT_ERROR_RESPONSE)
-            && (att_response_buffer[4] == ATT_ERROR_INSUFFICIENT_AUTHORIZATION)
-            && (att_connection.authenticated)){
-
-            	switch (sm_authorization_state(att_connection.con_handle)){
-            		case AUTHORIZATION_UNKNOWN:
-                        l2cap_release_packet_buffer();
-		             	sm_request_pairing(att_connection.con_handle);
-	    		        return;
-	    		    case AUTHORIZATION_PENDING:
-                        l2cap_release_packet_buffer();
-	    		    	return;
-	    		    default:
-	    		    	break;
-            	}
-            }
-
-            att_server_state = ATT_SERVER_IDLE;
-            if (att_response_size == 0) {
-                l2cap_release_packet_buffer();
-                return;
-            }
-
-            l2cap_send_prepared_connectionless(att_connection.con_handle, L2CAP_CID_ATTRIBUTE_PROTOCOL, att_response_size);
-
-            // notify client about MTU exchange result
-            if (att_response_buffer[0] == ATT_EXCHANGE_MTU_RESPONSE){
-                att_emit_mtu_event(att_connection.con_handle, att_connection.mtu);
-            }
-
+            // move on
+            att_server_state = ATT_SERVER_REQUEST_RECEIVED_AND_VALIDATED;
+            att_dispatch_server_request_can_send_now_event(att_connection.con_handle);
             break;
+
+        default:
+            break;
+    }
+}
+
+static void att_server_handle_can_send_now(void){
+
+    // NOTE: we get l2cap fixed channel instead of con_handle 
+    // TODO: get con_handle
+
+    if (att_server_state == ATT_SERVER_REQUEST_RECEIVED_AND_VALIDATED){
+        int sent = att_server_process_validated_request(att_connection.con_handle);
+        if (sent && att_client_waiting_for_can_send){
+            att_dispatch_server_request_can_send_now_event(att_connection.con_handle);
+            return;
+        }
+    }
+
+    if (att_client_waiting_for_can_send){
+        att_client_waiting_for_can_send = 0;
+        att_emit_can_send_now_event();
     }
 }
 
 static void att_packet_handler(uint8_t packet_type, uint16_t handle, uint8_t *packet, uint16_t size){
     switch (packet_type){
+
         case HCI_EVENT_PACKET:
             if (packet[0] != L2CAP_EVENT_CAN_SEND_NOW) break;
-            att_run();
+            att_server_handle_can_send_now();
             break;
 
         case ATT_DATA_PACKET:
@@ -345,11 +377,24 @@ static void att_packet_handler(uint8_t packet_type, uint16_t handle, uint8_t *pa
                 return;
             }
 
+            // directly process command
+            // note: signed write cannot be handled directly as authentication needs to be verified
+            if (packet[0] == ATT_WRITE_COMMAND){
+                att_handle_request(&att_connection, packet, size, 0);
+                return;
+            }
+
             // check size
-            if (size > sizeof(att_request_buffer)) return;
+            if (size > sizeof(att_request_buffer)) {
+                log_info("att_packet_handler: dropping att pdu 0x%02x as size %u > att_request_buffer %u", packet[0], size, (int) sizeof(att_request_buffer));
+                return;
+            }
 
             // last request still in processing?
-            if (att_server_state != ATT_SERVER_IDLE) return;
+            if (att_server_state != ATT_SERVER_IDLE){
+                log_info("att_packet_handler: skipping att pdu 0x%02x as server not idle (state %u)", packet[0], att_server_state);
+                return;
+            }
 
             // store request
             att_server_state = ATT_SERVER_REQUEST_RECEIVED;
@@ -385,12 +430,20 @@ void att_server_register_packet_handler(btstack_packet_handler_t handler){
     att_client_packet_handler = handler;    
 }
 
-int  att_server_can_send_packet_now(void){
+// NOTE: con_handle is ignored for now as only a single connection is supported
+// TODO: support multiple connections
+
+int  att_server_can_send_packet_now(hci_con_handle_t con_handle){
 	if (att_connection.con_handle == 0) return 0;
 	return att_dispatch_server_can_send_now(att_connection.con_handle);
 }
 
-int att_server_notify(uint16_t attribute_handle, uint8_t *value, uint16_t value_len){
+void att_server_request_can_send_now_event(hci_con_handle_t con_handle){
+    att_client_waiting_for_can_send = 1;
+    att_dispatch_server_request_can_send_now_event(att_connection.con_handle);
+}
+
+int att_server_notify(hci_con_handle_t con_handle, uint16_t attribute_handle, uint8_t *value, uint16_t value_len){
     if (!att_dispatch_server_can_send_now(att_connection.con_handle)) return BTSTACK_ACL_BUFFERS_FULL;
 
     l2cap_reserve_packet_buffer();
@@ -399,7 +452,7 @@ int att_server_notify(uint16_t attribute_handle, uint8_t *value, uint16_t value_
 	return l2cap_send_prepared_connectionless(att_connection.con_handle, L2CAP_CID_ATTRIBUTE_PROTOCOL, size);
 }
 
-int att_server_indicate(uint16_t attribute_handle, uint8_t *value, uint16_t value_len){
+int att_server_indicate(hci_con_handle_t con_handle, uint16_t attribute_handle, uint8_t *value, uint16_t value_len){
     if (att_handle_value_indication_handle) return ATT_HANDLE_VALUE_INDICATION_IN_PORGRESS;
     if (!att_dispatch_server_can_send_now(att_connection.con_handle)) return BTSTACK_ACL_BUFFERS_FULL;
 

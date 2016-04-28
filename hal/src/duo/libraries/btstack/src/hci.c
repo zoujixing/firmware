@@ -45,7 +45,7 @@
 #include "btstack_config.h"
 
 
-#ifdef HAVE_TICK
+#ifdef HAVE_EMBEDDED_TICK
 #include "btstack_run_loop_embedded.h"
 #endif
 
@@ -148,8 +148,8 @@ static hci_connection_t * create_connection_for_bd_addr_and_type(bd_addr_t addr,
 *
  * @return le connection parameter range struct
  */
-void gap_get_connection_parameter_range(le_connection_parameter_range_t range){
-    range = hci_stack->le_connection_parameter_range;
+void gap_get_connection_parameter_range(le_connection_parameter_range_t * range){
+    *range = hci_stack->le_connection_parameter_range;
 }
 
 /**
@@ -157,8 +157,8 @@ void gap_get_connection_parameter_range(le_connection_parameter_range_t range){
  *
  */
 
-void gap_set_connection_parameter_range(le_connection_parameter_range_t range){
-    hci_stack->le_connection_parameter_range = range;
+void gap_set_connection_parameter_range(le_connection_parameter_range_t *range){
+    hci_stack->le_connection_parameter_range = *range;
 }
 
 /**
@@ -207,38 +207,23 @@ hci_connection_t * hci_connection_for_bd_addr_and_type(bd_addr_t  addr, bd_addr_
 
 static void hci_connection_timeout_handler(btstack_timer_source_t *timer){
     hci_connection_t * connection = (hci_connection_t *) btstack_run_loop_get_timer_context(timer);
-#ifdef HAVE_TIME
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    if (tv.tv_sec >= connection->timestamp.tv_sec + HCI_CONNECTION_TIMEOUT_MS/1000) {
-        // connections might be timed out
-        hci_emit_l2cap_check_timeout(connection);
-    }
-#endif
-#ifdef HAVE_TICK
+#ifdef HAVE_EMBEDDED_TICK
     if (btstack_run_loop_embedded_get_ticks() > connection->timestamp + btstack_run_loop_embedded_ticks_for_ms(HCI_CONNECTION_TIMEOUT_MS)){
         // connections might be timed out
         hci_emit_l2cap_check_timeout(connection);
     }
-#endif
-#ifdef HAVE_TIME_MS
+#else 
     if (btstack_run_loop_get_time_ms() > connection->timestamp + HCI_CONNECTION_TIMEOUT_MS){
         // connections might be timed out
         hci_emit_l2cap_check_timeout(connection);
     }
 #endif
-    btstack_run_loop_set_timer(timer, HCI_CONNECTION_TIMEOUT_MS);
-    btstack_run_loop_add_timer(timer);
 }
 
 static void hci_connection_timestamp(hci_connection_t *connection){
-#ifdef HAVE_TIME
-    gettimeofday(&connection->timestamp, NULL);
-#endif
-#ifdef HAVE_TICK
+#ifdef HAVE_EMBEDDED_TICK
     connection->timestamp = btstack_run_loop_embedded_get_ticks();
-#endif
-#ifdef HAVE_TIME_MS
+#else
     connection->timestamp = btstack_run_loop_get_time_ms();
 #endif
 }
@@ -312,7 +297,7 @@ static int hci_number_free_acl_slots_for_connection_type(bd_addr_type_t address_
             num_packets_sent_le += connection->num_acl_packets_sent;
         }
     }
-
+    log_debug("ACL classic buffers: %u used of %u", num_packets_sent_classic, hci_stack->acl_packets_total_num);
     int free_slots_classic = hci_stack->acl_packets_total_num - num_packets_sent_classic;
     int free_slots_le = 0;
 
@@ -424,20 +409,19 @@ int hci_can_send_acl_packet_now(hci_con_handle_t con_handle){
 }
 
 int hci_can_send_prepared_sco_packet_now(void){
-    if (!hci_transport_can_send_prepared_packet_now(HCI_SCO_DATA_PACKET)) {
-        hci_stack->sco_waiting_for_can_send_now = 1;
-        return 0;
-    }
+    if (!hci_transport_can_send_prepared_packet_now(HCI_SCO_DATA_PACKET)) return 0;
     if (!hci_stack->synchronous_flow_control_enabled) return 1;
     return hci_number_free_sco_slots() > 0;    
 }
 
 int hci_can_send_sco_packet_now(void){
-    if (hci_stack->hci_packet_buffer_reserved) {
-        hci_stack->sco_waiting_for_can_send_now = 1;
-        return 0;
-    }
+    if (hci_stack->hci_packet_buffer_reserved) return 0;
     return hci_can_send_prepared_sco_packet_now();
+}
+
+void hci_request_sco_can_send_now_event(void){
+    hci_stack->sco_waiting_for_can_send_now = 1;
+    hci_notify_if_sco_can_send_now();
 }
 
 // used for internal checks in l2cap.c
@@ -477,9 +461,13 @@ static int hci_send_acl_packet_fragments(hci_connection_t *connection){
     // testing: reduce buffer to minimum
     // max_acl_data_packet_length = 52;
 
+    log_debug("hci_send_acl_packet_fragments entered");
+
     int err;
     // multiple packets could be send on a synchronous HCI transport
     while (1){
+
+        log_debug("hci_send_acl_packet_fragments loop entered");
 
         // get current data
         const uint16_t acl_header_pos = hci_stack->acl_fragmentation_pos - 4;
@@ -504,6 +492,17 @@ static int hci_send_acl_packet_fragments(hci_connection_t *connection){
 
         // count packet
         connection->num_acl_packets_sent++;
+        log_debug("hci_send_acl_packet_fragments loop before send (more fragments %u)", more_fragments);
+
+        // update state for next fragment (if any) as "transport done" might be sent during send_packet already
+        if (more_fragments){
+            // update start of next fragment to send
+            hci_stack->acl_fragmentation_pos += current_acl_data_packet_length;
+        } else {
+            // done
+            hci_stack->acl_fragmentation_pos = 0;
+            hci_stack->acl_fragmentation_total_size = 0;
+        }
 
         // send packet
         uint8_t * packet = &hci_stack->hci_packet_buffer[acl_header_pos];
@@ -511,19 +510,16 @@ static int hci_send_acl_packet_fragments(hci_connection_t *connection){
         hci_dump_packet(HCI_ACL_DATA_PACKET, 0, packet, size);
         err = hci_stack->hci_transport->send_packet(HCI_ACL_DATA_PACKET, packet, size);
 
+        log_debug("hci_send_acl_packet_fragments loop after send (more fragments %u)", more_fragments);
+
         // done yet?
         if (!more_fragments) break;
-
-        // update start of next fragment to send
-        hci_stack->acl_fragmentation_pos += current_acl_data_packet_length;
 
         // can send more?
         if (!hci_can_send_prepared_acl_packet_now(connection->con_handle)) return err;
     }
 
-    // done    
-    hci_stack->acl_fragmentation_pos = 0;
-    hci_stack->acl_fragmentation_total_size = 0;
+    log_debug("hci_send_acl_packet_fragments loop over");
 
     // release buffer now for synchronous transport
     if (hci_transport_synchronous()){
@@ -832,13 +828,13 @@ void le_handle_advertisement_report(uint8_t *packet, int size){
     offset += 1;
 
     int i;
-    log_info("HCI: handle adv report with num reports: %d", num_reports);
+    // log_info("HCI: handle adv report with num reports: %d", num_reports);
     uint8_t event[12 + LE_ADVERTISING_DATA_SIZE]; // use upper bound to avoid var size automatic var
     for (i=0; i<num_reports;i++){
         uint8_t data_length = packet[offset + 8];
         uint8_t event_size = 10 + data_length;
         int pos = 0;
-        event[pos++] = GAP_LE_EVENT_ADVERTISING_REPORT;
+        event[pos++] = GAP_EVENT_ADVERTISING_REPORT;
         event[pos++] = event_size;
         memcpy(&event[pos], &packet[offset], 1+1+6); // event type + address type + address
         offset += 8;
@@ -1399,6 +1395,10 @@ static void event_handler(uint8_t *packet, int size){
                 hci_stack->manufacturer   = little_endian_read_16(packet, 10);
                 // hci_stack->lmp_subversion = little_endian_read_16(packet, 12);
                 log_info("Manufacturer: 0x%04x", hci_stack->manufacturer);
+                // notify app
+                if (hci_stack->local_version_information_callback){
+                    hci_stack->local_version_information_callback(packet);
+                }
             }
             if (HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_read_local_supported_commands)){
                 hci_stack->local_supported_commands[0] =
@@ -1594,7 +1594,7 @@ static void event_handler(uint8_t *packet, int size){
             }
             // PIN CODE REQUEST means the link key request didn't succee -> delete stored link key
             if (!hci_stack->link_key_db) break;
-            reverse_bd_addr(&packet[2], addr);
+            hci_event_pin_code_request_get_bd_addr(packet, addr);
             hci_stack->link_key_db->delete_link_key(addr);
             break;
             
@@ -1708,7 +1708,7 @@ static void event_handler(uint8_t *packet, int size){
         case HCI_EVENT_LE_META:
             switch (packet[2]){
                 case HCI_SUBEVENT_LE_ADVERTISING_REPORT:
-                    log_info("advertising report received");
+                    // log_info("advertising report received");
                     if (hci_stack->le_scanning_state != LE_SCANNING) break;
                     le_handle_advertisement_report(packet, size);
                     break;
@@ -1816,7 +1816,7 @@ static void event_handler(uint8_t *packet, int size){
 
 static void sco_handler(uint8_t * packet, uint16_t size){
     if (!hci_stack->sco_packet_handler) return;
-    hci_stack->sco_packet_handler(HCI_SCO_DATA_PACKET, packet, size);
+    hci_stack->sco_packet_handler(HCI_SCO_DATA_PACKET, 0, packet, size);
 }
 
 static void packet_handler(uint8_t packet_type, uint8_t *packet, uint16_t size){
@@ -1844,14 +1844,14 @@ void hci_add_event_handler(btstack_packet_callback_registration_t * callback_han
 
 
 /** Register HCI packet handlers */
-void hci_register_acl_packet_handler(void (*handler)(uint8_t packet_type, uint8_t *packet, uint16_t size)){
+void hci_register_acl_packet_handler(btstack_packet_handler_t handler){
     hci_stack->acl_packet_handler = handler;
 }
 
 /**
  * @brief Registers a packet handler for SCO data. Used for HSP and HFP profiles.
  */
-void hci_register_sco_packet_handler(void (*handler)(uint8_t packet_type, uint8_t *packet, uint16_t size)){
+void hci_register_sco_packet_handler(btstack_packet_handler_t handler){
     hci_stack->sco_packet_handler = handler;    
 }
 
@@ -1981,7 +1981,7 @@ void hci_close(void){
     hci_stack = NULL;
 }
 
-void hci_set_class_of_device(uint32_t class_of_device){
+void gap_set_class_of_device(uint32_t class_of_device){
     hci_stack->class_of_device = class_of_device;
 }
 
@@ -2361,10 +2361,16 @@ static void hci_run(void){
                  hci_stack->le_advertisements_filter_policy);
             return;
         }
-        if (hci_stack->le_advertisements_todo & LE_ADVERTISEMENT_TASKS_SET_DATA){
-            hci_stack->le_advertisements_todo &= ~LE_ADVERTISEMENT_TASKS_SET_DATA;
+        if (hci_stack->le_advertisements_todo & LE_ADVERTISEMENT_TASKS_SET_ADV_DATA){
+            hci_stack->le_advertisements_todo &= ~LE_ADVERTISEMENT_TASKS_SET_ADV_DATA;
             hci_send_cmd(&hci_le_set_advertising_data, hci_stack->le_advertisements_data_len,
                 hci_stack->le_advertisements_data);
+            return;
+        }
+        if (hci_stack->le_advertisements_todo & LE_ADVERTISEMENT_TASKS_SET_SCAN_DATA){
+            hci_stack->le_advertisements_todo &= ~LE_ADVERTISEMENT_TASKS_SET_SCAN_DATA;
+            hci_send_cmd(&hci_le_set_scan_response_data, hci_stack->le_scan_response_data_len,
+                hci_stack->le_scan_response_data);
             return;
         }
         if (hci_stack->le_advertisements_todo & LE_ADVERTISEMENT_TASKS_ENABLE){
@@ -2924,7 +2930,7 @@ static void hci_emit_event(uint8_t * event, uint16_t size, int dump){
 
 static void hci_emit_acl_packet(uint8_t * packet, uint16_t size){
     if (!hci_stack->acl_packet_handler) return;
-    hci_stack->acl_packet_handler(HCI_ACL_DATA_PACKET, packet, size);
+    hci_stack->acl_packet_handler(HCI_ACL_DATA_PACKET, 0, packet, size);
 }
 
 static void hci_notify_if_sco_can_send_now(void){
@@ -2934,7 +2940,7 @@ static void hci_notify_if_sco_can_send_now(void){
         hci_stack->sco_waiting_for_can_send_now = 0;
         uint8_t event[2] = { HCI_EVENT_SCO_CAN_SEND_NOW, 0 };
         hci_dump_packet(HCI_EVENT_PACKET, 1, event, sizeof(event));
-        hci_stack->sco_packet_handler(HCI_EVENT_PACKET, event, sizeof(event));
+        hci_stack->sco_packet_handler(HCI_EVENT_PACKET, 0, event, sizeof(event));
     }
 }
 
@@ -3328,6 +3334,14 @@ int gap_request_connection_parameter_update(hci_con_handle_t con_handle, uint16_
     return 0;
 }
 
+static void gap_advertisments_changed(void){
+    // disable advertisements before updating adv, scan data, or adv params
+    if (hci_stack->le_advertisements_active){
+        hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_DISABLE | LE_ADVERTISEMENT_TASKS_ENABLE;
+    }
+    hci_run();
+}
+
 /**
  * @brief Set Advertisement Data
  * @param advertising_data_length
@@ -3337,12 +3351,21 @@ int gap_request_connection_parameter_update(hci_con_handle_t con_handle, uint16_
 void gap_advertisements_set_data(uint8_t advertising_data_length, uint8_t * advertising_data){
     hci_stack->le_advertisements_data_len = advertising_data_length;
     hci_stack->le_advertisements_data = advertising_data;
-    hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_SET_DATA;
-    // disable advertisements before setting data
-    if (hci_stack->le_advertisements_active){
-        hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_DISABLE | LE_ADVERTISEMENT_TASKS_ENABLE;
-    }
-    hci_run();
+    hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_SET_ADV_DATA;
+    gap_advertisments_changed();
+}
+
+/** 
+ * @brief Set Scan Response Data
+ * @param advertising_data_length
+ * @param advertising_data (max 31 octets)
+ * @note data is not copied, pointer has to stay valid
+ */
+void gap_scan_response_set_data(uint8_t scan_response_data_length, uint8_t * scan_response_data){
+    hci_stack->le_scan_response_data_len = scan_response_data_length;
+    hci_stack->le_scan_response_data = scan_response_data;
+    hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_SET_SCAN_DATA;
+    gap_advertisments_changed();
 }
 
 /**
@@ -3372,11 +3395,7 @@ void gap_advertisements_set_data(uint8_t advertising_data_length, uint8_t * adve
     memcpy(hci_stack->le_advertisements_direct_address, direct_address, 6);
 
     hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_SET_PARAMS;
-    // disable advertisements before changing params
-    if (hci_stack->le_advertisements_active){
-        hci_stack->le_advertisements_todo |= LE_ADVERTISEMENT_TASKS_DISABLE | LE_ADVERTISEMENT_TASKS_ENABLE;
-    }
-    hci_run();
+    gap_advertisments_changed();
  }
 
 /**
@@ -3513,7 +3532,7 @@ void hci_set_sco_voice_setting(uint16_t voice_setting){
  * @brief Get SCO Voice Setting
  * @return current voice setting
  */
-uint16_t hci_get_sco_voice_setting(){
+uint16_t hci_get_sco_voice_setting(void){
     return hci_stack->sco_voice_setting;
 }
 
@@ -3532,6 +3551,14 @@ int hci_get_sco_packet_length(void){
  */
 void hci_set_hardware_error_callback(void (*fn)(void)){
     hci_stack->hardware_error_callback = fn;
+}
+
+/**
+ * @brief Set callback for local information from Bluetooth controller right after HCI Reset
+ * @note Can be used to select chipset driver dynamically during startup
+ */
+void hci_set_local_version_information_callback(void (*fn)(uint8_t * local_version_information)){
+    hci_stack->local_version_information_callback = fn;
 }
 
 void hci_disconnect_all(void){
