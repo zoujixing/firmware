@@ -10,6 +10,7 @@ extern "C" {
 #include "btstack_chipset_bcm.h"
 #include "btstack_config.h"
 #include "hci_dump.h"
+#include "btstack_hal_define.h"
 
 /**@brief BLE status */
 typedef enum BLEStatus {
@@ -84,6 +85,8 @@ void hal_btstack_enable_packet_info(void);
 void hal_btstack_setRandomAddressMode(gap_random_address_type_t random_address_type);
 void hal_btstack_setRandomAddr(bd_addr_t addr);
 void hal_btstack_setPublicBdAddr(bd_addr_t addr);
+void hal_btstack_getLocalBdAddr(bd_addr_t address_buffer);
+void hal_btstack_getAddrOfAdvertisement(uint8_t *addr_type, bd_addr_t addr);
 void hal_btstack_setLocalName(const char *local_name);
 void hal_btstack_setAdvertisementParams(uint16_t adv_int_min, uint16_t adv_int_max, uint8_t adv_type, uint8_t dir_addr_type, bd_addr_t dir_addr, uint8_t channel_map, uint8_t filter_policy);
 void hal_btstack_setAdvertisementData(uint16_t size, uint8_t *data);
