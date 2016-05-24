@@ -79,12 +79,28 @@
 #define  BLE_GAP_ADV_MAX_SIZE           31
 
 
+/**@defgroup BLE_GAP_ADDR_TYPES GAP Address types
+ * @{ */
+#define BLE_GAP_ADDR_TYPE_PUBLIC                        0x00 /**< Public address. */
+#define BLE_GAP_ADDR_TYPE_RANDOM                        0x01 /**< Random address. */
+/**@} */
+
+
 /**@defgroup BLE_GAP_ADV_TYPES GAP Advertising types
  * @{ */
 #define BLE_GAP_ADV_TYPE_ADV_IND          0x00   /**< Connectable undirected. */
 #define BLE_GAP_ADV_TYPE_ADV_DIRECT_IND   0x01   /**< Connectable directed. */
 #define BLE_GAP_ADV_TYPE_ADV_SCAN_IND     0x02   /**< Scannable undirected. */
 #define BLE_GAP_ADV_TYPE_ADV_NONCONN_IND  0x03   /**< Non connectable undirected. */
+/**@} */
+
+
+/**@defgroup BLE_GAP_ADV_CHANNEL_MAP channel map
+ * @{ */
+#define BLE_GAP_ADV_CHANNEL_MAP_37        1
+#define BLE_GAP_ADV_CHANNEL_MAP_38        2
+#define BLE_GAP_ADV_CHANNEL_MAP_39        4
+#define BLE_GAP_ADV_CHANNEL_MAP_ALL       7
 /**@} */
 
 
@@ -305,6 +321,9 @@
 #define BLE_APPEARANCE_OUTDOOR_SPORTS_ACT_LOC_POD          5187 /**< Location Pod (Outdoor Sports Activity subtype). */
 #define BLE_APPEARANCE_OUTDOOR_SPORTS_ACT_LOC_AND_NAV_POD  5188 /**< Location and Navigation Pod (Outdoor Sports Activity subtype). */
 /** @} */
+
+#define HIGH_BYTE(x) ((uint8_t)(((x)&0xFF00)>>8))
+#define LOW_BYTE(x)  ((uint8_t)((x)&0x00FF))
 
 #endif
 
